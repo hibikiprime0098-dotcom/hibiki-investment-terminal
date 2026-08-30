@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>投資分析ターミナル v0.10 · GitHub Pages</title>
+<link href="./manifest.webmanifest" rel="manifest"/>
+<meta content="#070b10" name="theme-color"/>
+<meta content="yes" name="mobile-web-app-capable"/>
+<meta content="yes" name="apple-mobile-web-app-capable"/>
+<meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"/>
+<meta content="投資分析" name="apple-mobile-web-app-title"/>
+<link href="./icons/apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./icons/icon-192.png" rel="icon" sizes="192x192" type="image/png"/>
+
+<link href="./styles.css" rel="stylesheet"/></head>
+<body>
+<div class="lock" id="lock">
+<div class="box auth-shell">
+<div class="kicker">PERSONAL ACCOUNT</div>
+<h1 class="auth-title">投資分析ターミナル</h1>
+<p class="auth-sub">共通アクセスコードは廃止しました。自分のアカウントを作成してログインします。</p>
+<div class="auth-tabs">
+<button class="tab on" id="authLoginTab">ログイン</button>
+<button class="tab" id="authRegisterTab">新規登録</button>
+</div>
+<div class="auth-panel" id="loginPanel">
+<input autocomplete="username" id="loginId" placeholder="メールアドレス または 名前"/>
+<input autocomplete="current-password" id="loginPassword" placeholder="パスワード" type="password"/>
+<button class="green" id="login">ログイン</button>
+</div>
+<div class="auth-panel hide" id="registerPanel">
+<input autocomplete="name" id="registerName" placeholder="名前（表示名）"/>
+<input autocomplete="email" id="registerEmail" placeholder="メールアドレス" type="email"/>
+<input autocomplete="new-password" id="registerPassword" placeholder="パスワード（8文字以上）" type="password"/>
+<input autocomplete="new-password" id="registerPassword2" placeholder="パスワードを再入力" type="password"/>
+<button class="green" id="register">アカウントを作成</button>
+</div>
+<p class="auth-error" id="err"></p>
+<div class="auth-note"><b>現在の認証：</b>共通コードは廃止済みです。Supabaseクラウド認証がこの実行環境にまだ反映されていないため、v0.9ではパスワードをWeb Cryptoでハッシュ化した「端末アカウント」を使用します。共有された相手は自分の端末で自分のアカウントを作成できます。端末をまたぐ同期はSupabase接続後に有効化します。</div>
+</div>
+</div>
+<div class="hide" id="app">
+<div class="top"><span>投資分析ターミナル v0.10 · GitHub Pages</span><div class="top-actions"><span class="account-pill" id="accountPill">ゲスト</span><button class="ghost" id="shareTop">共有</button><button class="ghost install-btn" id="installTop">ホーム画面に追加</button><button class="ghost" id="accountBtn">アカウント</button></div></div>
+<div class="primary-nav"><div class="nav-left"><button class="navtab on" data-page="screen">銘柄スクリーナー</button><button class="navtab" data-page="planner">ポートフォリオ・プランナー</button><button class="navtab" data-page="model">モデル / 分析基準</button></div><span class="muted">Hard Filter → Factor → Fundamental → Valuation → Risk → Portfolio</span></div>
+<div class="ai-strip"><b>AI投資委員会 <span class="ai-badge">追加料金0円・ローカル分析</span></b><input id="aiQuick" placeholder="例：100万円ならどう分散？ / AI関連で過熱感が少ない候補は？"/><button class="green" id="aiQuickSend">相談</button></div>
+<main>
+<section class="page" id="screenPage">
+<div class="box hero">
+<div class="kicker">UNIVERSE-FIRST RESEARCH</div>
+<h1>最初から<span>全銘柄</span>を母集団にする。</h1>
+<p class="muted">日本・米国の上場株を全件ロードし、まずHard FilterとResearch Priorityで調査対象を絞ります。正式なInvestment Scoreは、Quality / Growth / Valuation / Momentum &amp; Revision / Durabilityの必要データが揃った銘柄だけに算出し、上位5〜10%をFundamental / Intrinsic Value / Risk分析へ進めます。</p>
+</div>
+<div class="box toolbar">
+<div class="head"><b>共有</b><span class="muted">現在の検索条件を含むURLを共有</span></div>
+<div class="sharebar"><button class="green" id="nativeShare">スマホで共有</button><button class="ghost" id="lineShare">LINEで送る</button><button class="ghost" id="copyShare">リンクをコピー</button><button class="ghost install-btn" id="installApp">ホーム画面に追加</button></div>
+<p class="muted" id="shareMsg"></p>
+</div>
+<div class="status">
+<div class="card stat"><small>日本株 母集団</small><b id="jpN">—</b><span class="muted" id="jpStatus">ロード待ち</span></div>
+<div class="card stat"><small>米国株 母集団</small><b id="usN">—</b><span class="muted" id="usStatus">ロード待ち</span></div>
+<div class="card stat"><small>全母集団</small><b id="allN">—</b><span class="muted">普通株中心</span></div>
+<div class="card stat"><small>一次分析済み</small><b id="analyzedN">—</b><span class="muted">全母集団に自動適用</span></div>
+<div class="card stat"><small>現在の表示候補</small><b id="filteredN">—</b><span class="muted">フィルター後</span></div>
+</div>
+<div class="box toolbar">
+<div class="tabs">
+<button class="tab on" data-r="ALL">日米すべて</button>
+<button class="tab" data-r="JP">日本株</button>
+<button class="tab" data-r="US">米国株</button>
+</div>
+<div class="controls">
+<input id="search" placeholder="企業名・ティッカー・証券コードを検索"/>
+<input id="budget" min="0" placeholder="最大投資額（円）" step="10000" type="number" value=""/>
+<select id="sector"><option value="ALL">全11セクター</option></select>
+<input id="themeSearch" placeholder="テーマ自由検索（例：液冷、量子、宇宙、防衛、銅、電池、AI創薬）"/><select id="theme"><option value="ALL">代表テーマ</option></select>
+</div>
+<div class="note">全銘柄には <b>Research Priority</b> を付けますが、これは「分析時間を使う優先順位」です。正式なTotal Scoreは <b>25% Quality + 25% Growth + 20% Valuation + 20% Momentum/Revision + 10% Durability</b> を業種内標準化して計算し、必要データ不足時は出しません。</div>
+<div class="note warn"><b>投資額フィルター：</b>米国株は取得CSVの株価×1株で即時計算。日本株は全銘柄の現在値フィードをまだ接続していないため、価格取得済み銘柄には正確に適用し、未取得銘柄は誤って除外しません。次段階でJ-Quants/市場データ接続に置換します。</div>
+</div>
+<div class="model-banner sec">
+<div class="model-step"><b>1. Hard Filter</b><span>時価総額 / 売買代金 / 債務超過 / Going Concern / 会計問題</span></div>
+<div class="model-step"><b>2. 5-Factor</b><span>Q 25 / G 25 / V 20 / M+Revision 20 / D 10</span></div>
+<div class="model-step"><b>3. Deep Research</b><span>上位5〜10%を有報・決算・競争優位・Red Flagで再検証</span></div>
+<div class="model-step"><b>4. Valuation</b><span>DCF / Forward PER / EV-EBIT / FCF Yield、Bull/Base/Bear</span></div>
+<div class="model-step"><b>5. Portfolio</b><span>集中上限 / 相関 / リスク予算 / リバランス</span></div>
+</div>
+<div class="sec">
+<div class="head"><h3>全11セクター</h3><button class="ghost" id="clearSector">解除</button></div>
+<div class="chips" id="sectorChips"></div>
+</div>
+<div class="sec">
+<div class="head"><h3>テーマ</h3><button class="ghost" id="clearTheme">解除</button></div>
+<p class="muted">代表テーマに加え、企業名・業種・キーワード辞書から多数のテーマタグを自動生成します。上の自由検索欄には「液冷」「量子」「銅」「防衛」「AI創薬」のように任意の語を入力できます。</p>
+<div class="chips" id="themeChips"></div>
+</div>
+<div class="sec">
+<div class="head"><h3>全ユニバース一覧</h3><div class="muted" id="sortLabel">正式Total Score優先 → Research Priority</div></div>
+<div class="table" id="table"><div class="loading"><span class="spin"></span>上場株ユニバースを読み込み中…</div></div>
+<div class="pager">
+<span class="muted" id="pageInfo"></span>
+<div class="buttons"><button class="ghost" id="prev">← 前</button><button class="ghost" id="next">次 →</button></div>
+</div>
+</div>
+<div class="box source">
+<b>ユニバース設計</b>
+<p class="muted">日本：東証普通株マスターを中心に日次上場コード一覧で新規銘柄を補完。米国：日次更新のNASDAQ由来株式CSVを使い、明らかなワラント・ユニット・債券・優先株等を除外。詳細分析は別レイヤーでEDINET / SEC EDGAR / 企業IRを接続する設計。</p>
+<code>Universe ≠ Analyzed.  全量を先に持ち、分析は後から埋める。</code>
+</div>
+</section>
+<section class="page hide" id="plannerPage">
+<div class="box hero"><div class="kicker">INSTITUTIONAL-STYLE PORTFOLIO CONSTRUCTION</div><h1>投資総額から、<span>勝ち筋とリスク</span>を同時に設計する。</h1><p class="muted">銘柄ランキングをそのまま買うのではなく、コア・構造成長・非対称ポテンシャルの3層に分け、国・業界・テーマ・1銘柄の集中上限を置いて配分します。現在のスコアモデルを前提にした教育用シミュレーションです。</p></div>
+<div class="planner-grid sec">
+<div class="box planner-form">
+<h3>投資条件</h3>
+<label>初期投資総額（円）</label><input id="planTotal" min="50000" step="10000" type="number" value="1000000"/>
+<label>毎月の追加投資（円）</label><input id="planMonthly" min="0" step="1000" type="number" value="50000"/>
+<label>運用期間</label><select id="planHorizon"><option value="3">3年</option><option selected="" value="5">5年</option><option value="10">10年</option><option value="20">20年</option></select>
+<label>リスク許容度</label><select id="planRisk"><option value="defensive">慎重</option><option selected="" value="balanced">バランス</option><option value="growth">成長重視</option><option value="aggressive">積極</option></select>
+<label>地域方針</label><select id="planRegion"><option selected="" value="balanced">日米バランス</option><option value="us">米国成長重視</option><option value="jp">日本株重視</option></select>
+<label>候補母集団</label><select id="planUniverse"><option selected="" value="all">全銘柄から選ぶ</option><option value="filtered">現在の絞り込み結果から選ぶ</option></select>
+<button class="green" id="buildPlan" style="width:100%;margin-top:13px">機関投資家型プランを作成</button>
+<div class="riskbox" style="margin-top:10px"><b>設計原則</b><p class="muted" style="margin-bottom:0">予想リターンだけでなく、銘柄・セクター・テーマの集中、流動性、投資期間、現金余力を同時に管理します。</p></div>
+</div>
+<div class="planner-output" id="planOutput">
+<div class="box plan-summary"><h2>条件を入力してプランを作成</h2><p class="muted">現在の全銘柄ユニバースとInvestment / Potential / Screening Scoreから候補を構成します。</p></div>
+</div>
+</div>
+</section>
+<section class="page hide" id="modelPage">
+<div class="box hero"><div class="kicker">INSTITUTIONAL RESEARCH MODEL v0.9</div><h1>「おすすめ」ではなく、<span>再現可能な投資意思決定</span>を作る。</h1><p class="muted">正式スコアは業種内・規模近似群で標準化し、データの実績 / 会社予想 / Consensus / AI推定を分離します。取得不能値は補完せず「データ不足」。高スコアはBUYではなく、深掘り優先度を意味します。</p></div>
+<div class="model-grid sec">
+<div class="box model-card"><div class="kicker">TOTAL SCORE</div><h2>100点 Factor Model</h2><div class="formula">0.25Q + 0.25G + 0.20V + 0.20M + 0.10D</div><p class="muted">85+ 最優先調査 / 80–84.9 強い候補 / 75–79.9 詳細調査 / 65–74.9 Watchlist / 65未満 優先度低。いずれも自動BUYではありません。</p></div>
+<div class="box model-card"><div class="kicker">NORMALIZATION</div><h2>業種内Z-score</h2><div class="formula">Z* = clip((x−μ)/σ, −3, +3)<br/>Score = 50 + (50/3) × Z*</div><p class="muted">低いほど良い指標は符号反転。Percentile Rankも併用して外れ値耐性を監査。金融・REIT・資源・SaaS・バイオ等は別テンプレート。</p></div>
+</div>
+<div class="factor-grid sec">
+<div class="box factor-card"><b>Quality · 25%</b><p>ROIC 25% / ROE 20% / Operating Margin 20% / Cash Flow Quality 20% / Safety 15%</p><small>ROE単独評価禁止。営業CF÷純利益、Debt、EPS安定性を併用。</small></div>
+<div class="box factor-card"><b>Growth · 25%</b><p>Sales CAGR 25% / EPS CAGR 30% / Operating Profit CAGR 25% / Forward Growth 20%</p><small>単年度増益を過大評価せず、3年CAGRと将来予想を分離。</small></div>
+<div class="box factor-card"><b>Valuation · 20%</b><p>Earnings Yield 30% / FCF Yield 25% / EV/EBIT 20% / Relative Valuation 25%</p><small>低PER＝割安は禁止。利益ピークとValue TrapをRed Flagで確認。</small></div>
+<div class="box factor-card"><b>Momentum / Revision · 20%</b><p>12-1 Momentum 25% / 6M 20% / Relative Strength 15% / Earnings Revision 40%</p><small>Revision Magnitude × Breadthを最重視。Consensusが取れなければ不足扱い。</small></div>
+<div class="box factor-card"><b>Durability · 10%</b><p>参入障壁 / Pricing Power / Switching Cost / Network・Brand・IP / TAM</p><small>各0〜2点。顧客集中、シェア、Recurring Revenue、Capital Allocationも検証。</small></div>
+</div>
+<div class="model-grid sec">
+<div class="box model-card"><div class="kicker">RED FLAG GATE</div><h2>高得点でも止める</h2><div class="red-list">一過性利益 · 営業利益/CF乖離 · 大型M&amp;A · Goodwill · 希薄化 · 顧客集中 · 製品集中 · 景気循環ピーク · Commodity依存 · 会計方針変更 · 減損 · 規制 · 地政学 · 為替 · Valuation過熱</div></div>
+<div class="box model-card"><div class="kicker">INTRINSIC VALUE</div><h2>Bull / Base / Bear</h2><p class="muted">Revenue Growth / Operating Margin / EPS / FCF / 適正Multipleを3シナリオ化。Current Price、Expected Upside、Bear Downside、Confidenceを別々に表示します。</p></div>
+</div>
+<div class="box sec model-card"><div class="kicker">NEXT MODEL</div><h2>Expected Alphaへ拡張</h2><div class="formula">Expected Alphaᵢ = f(Q, G, V, M, Revision, Risk, ...)</div><p class="muted">最終目標は「何点か」ではなく、今後12か月のTOPIX/市場に対する期待超過収益率とDownsideを推定すること。Sector/Size Neutralization、Beta Adjustment、Factor Exposure、Correlation Matrixを加えます。</p></div><div class="box sec audit"><div class="kicker">MODEL GOVERNANCE</div><h2>バックテスト / モデル監査</h2><p>Top 5% / 10% / 20%をTOPIXと比較し、CAGR・超過Return・Sharpe・Sortino・Max Drawdown・Hit Rate・Volatility・Turnover・Information Ratioを測定。</p><p class="muted">Look-ahead / Survivorship / Selection Bias / Data Snooping / Overfittingを禁止。WeightはTraining → Validation → Out-of-Sampleで比較し、過去最高リターンではなくOOS安定性を優先します。</p><div class="audit-badges"><span>Point-in-Time</span><span>Sector Neutral</span><span>Size Neutral</span><span>Beta Adjust</span><span>Factor Correlation</span><span>Risk Budget</span></div></div>
+<div class="box sec data-policy"><div class="kicker">DATA POLICY</div><h2>データの鮮度と出所をスコアより優先</h2><div class="data-row"><b>日本</b><span>EDINET / 企業IR / 決算短信・説明資料 / J-Quants（遅延データは「最新」と表示しない）</span></div><div class="data-row"><b>米国</b><span>SEC EDGAR XBRL / 10-K / 10-Q / 8-K / Earnings Release</span></div><div class="data-row"><b>分類</b><span>実績 / 会社予想 / Consensus / AI推定を画面上で明示</span></div><div class="data-row"><b>不足</b><span>推測補完禁止。Factor Scoreを確定せずData Coverageを表示</span></div></div>
+</section>
+</main>
+</div>
+<div class="advisor hide" id="advisor"><div class="advisor-head"><div><b>AI投資委員会</b><div class="muted">現在の銘柄・絞り込み・プランを参照</div></div><button class="ghost" id="advisorClose">×</button></div><div class="advisor-log" id="advisorLog"><div class="msg ai">相談内容を入力してください。分散、投資額、特定銘柄、テーマ、リスク管理について現在のモデルから整理します。</div></div><div class="advisor-send"><input id="advisorInput" placeholder="投資委員会に相談"/><button class="green" id="advisorSend">送信</button></div></div>
+<div class="modal hide" id="modal"><div><button class="ghost x" id="x">×</button><div class="detail" id="detail"></div></div></div>
+
+
+<script defer="True" src="./app-1.js"></script><script defer="True" src="./app-2.js"></script><script defer="True" src="./app-3.js"></script><script defer="True" src="./app-4.js"></script><script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js',{scope:'./'}).catch(()=>{}))}</script></body>
+</html>
