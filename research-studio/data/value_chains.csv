@@ -1,0 +1,17 @@
+バリューチェーン,増える需要の起点,買われる製品・役務,コード,企業,企業の関与,一次資料/事実,利益化の限界,需要時期（仮説）,監視KPI,逆風・リスク,検証URL,検討段階
+量子｜物理部材,量子ビット数・研究設備増,冷却原子向けレーザー・検出,6965,浜松ホトニクス,光検出・レーザーを共同開発,2026/6/4 MOU一次資料,量子収益の寄与額は未公表,2030年前後以降も不確実,量子用途受注/量産移行/利益率,用途普及と契約不成立,https://www.hamamatsu.com/jp/ja/news/announcements/2026/20260604000000.html,優先して分析
+量子｜物理部材,半導体量子チップ試作増,低温プローブ/テスター,FORM,FormFactor,極低温検査システム,検査事業と量子関連の既存資料,量子専業売上比率が小さく不明,研究・製造投資に先行,低温装置受注/半導体サイクル,通常半導体需要の変動が大きい,https://www.formfactor.com/,優先して分析
+量子｜計測,方式間競争・評価増,量子制御・精密計測,KEYS,Keysight Technologies,制御・測定システム,量子向け製品公式ページ,量子向け利益寄与未定量,商用化前の開発期間から,計測機器受注・研究機関採用,通常通信試験・景気変動,https://www.keysight.com/us/en/industries/quantum.html,優先して分析
+量子｜極低温,超伝導量子ビット増,希釈冷凍機,OXIG,Oxford Instruments,極低温機器・研究設備,製品・用途一次資料,量子シェア・株価評価要再調査,研究設備投資に先行,装置台数/研究機関への受注,競争・技術方式の移行,https://www.oxinst.com/applications/quantum-technologies,監視候補
+量子｜極低温,冷却装置増設,冷凍機・極低温技術,6302,住友重機械工業,冷凍機技術と部品供給仮説,事業関連性の定量未検証,量子関連売上は未特定,研究・商用化の両段階,量子用途製品と受注,主力事業と量子需要の乖離,https://www.shi.co.jp/,追加調査
+PQC｜暗号装置,証明書・鍵の移行,HSM鍵管理,HO,Thales,PQC対応Luna 8 HSM,2026/8/4製品発表,PQC単独売上は未公表,標準移行で既に一部需要,HSM契約/認証更新/継続売上,防衛・宇宙を含む多角化,https://cpl.thalesgroup.com/about-us/newsroom/luna-8-thales-builds-cryptographic-security-ai-pqc-age,優先して分析
+PQC｜電子認証,耐量子証明書への移行,認証局・証明書試験,4498,サイバートラスト,PQC証明書試験環境,PQC製品ページ,試験環境の商用収益は未定量,移行需要の前段階,商用証明書/顧客獲得,標準仕様変更・小型株の変動,https://www.cybertrust.co.jp/pqc/,国内監視
+PQC｜電子認証,TLS/電子署名移行,証明書発行・更新,3788,GMOグローバルサインHD,SSL・クライアント認証の顧客基盤,証明書事業・銘柄一次資料,PQC追加売上は未検証,移行・更新費用が顕在化する時,電子証明書事業/証明書更新,標準化による価格低下,https://jp.globalsign.com/,国内監視
+PQC｜通信,暗号通信プロトコル移行,CDN・企業通信,NET,Cloudflare,PQC暗号交換を導入済み,公式開発者文書,標準対応は追加課金と限らない,既に移行対応,有料契約・顧客維持率,高バリュエーション,https://developers.cloudflare.com/ssl/post-quantum-cryptography/,株価待ち
+AI｜ID・認証,人間以外のAIエージェント増,権限・ID・アクセス管理,OKTA,Okta,Okta for AI Agents製品,2026/3導入発表・Q1決算,AI製品単独売上は未提示,足元から中期,AI Agents商用ARR/cRPO,Microsoftの統合競争,https://investor.okta.com/news-and-events/news-releases/news-details/2026/Okta-Announces-New-Blueprint-for-the-Secure-Agentic-Enterprise/default.aspx,優先して分析
+AI｜レジリエンス,防御突破後の迅速復旧,データ復旧・クラウド保護,RBRK,Rubrik,AIエージェント安全・復旧領域を統合,2026/8 Q2決算 売上+38%,売上成長は確認、テーマ寄与は未分解,足元から中期,ARR/FCF/大口顧客,株式報酬・競争,https://ir.rubrik.com/news-events/press-releases/news-details/2026/Rubrik-Reports-Second-Quarter-Fiscal-Year-2027-Financial-Results/default.aspx,優先して分析
+AI｜レジリエンス,ランサム被害・データ増,データ保護・迅速復旧,CVLT,Commvault,SaaSバックアップ/復旧,2026/7 Q1決算 ARR+22%,既存ARR実績あり,足元から中期,ARR/FCF/更新率,競争・成長鈍化,https://commvault.gcs-web.com/news-releases/news-release-details/commvault-announces-first-quarter-fiscal-2027-financial-results,優先して分析
+AI｜光ネットワーク,高速AIクラスタの通信需要,光ファイバー・接続,GLW,Corning,NVIDIA/Meta向け供給契約,2026年大型契約一次資料,契約は実在、採算と株価は要確認,2026年から段階的,光通信売上/工場稼働/FCF,能力拡張のコスト・顧客集中,https://investor.corning.com/news-and-events/news/news-details/2026/Corning-and-Meta-Announce-Multiyear-up-to-6-Billion-Agreement-to-Accelerate-US-Data-Center-Buildout/default.aspx,優先して分析
+AI｜光ネットワーク,北米DC設備投資増,高密度光ケーブル,5803,フジクラ,会社がDC向け売上拡大を明記,2026年決算短信,2026/3期全社売上+20.7%,足元から中期,情報通信部門収益・増産率,急増産・素材不足・株価過熱,https://www2.jpx.co.jp/disc/58030/140120260514532598.pdf,優先して分析
+AI｜電力・冷却,GPU群の電力・熱密度増,UPS・液冷・配電,VRT,Vertiv,データセンター電源・冷却装置,既存製品・決算資料,業績がAI投資サイクルに連動,今から中期,受注/粗利/FCF/設備投資,高評価・設備投資減速,https://investors.vertiv.com/,優先して分析
+AI｜電力・冷却,増設電力・配電需要,配電機器・スイッチギア,ETN,Eaton,電力システムと設備,事業IR資料,AI用途売上比率の追加検証,今から中期,電気部門受注・受注残,公共投資・金利・受注採算,https://www.eaton.com/us/en-us/company/investor-relations.html,監視候補
