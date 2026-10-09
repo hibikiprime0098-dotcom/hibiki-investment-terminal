@@ -1,0 +1,55 @@
+name: Investment Research Studio - daily quotes and Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'research-studio/**'
+      - '.github/workflows/investment-research.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '45 23 * * 1-5'
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: investment-research-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Refresh published US closing prices (optional API connection)
+        if: github.event_name != 'push'
+        env:
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+        run: python research-studio/scripts/update_prices.py
+      - name: Save refreshed quotes
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research-studio/data/quotes.json
+          if ! git diff --cached --quiet; then
+            git commit -m "data: refresh research quotes"
+            git push origin HEAD:main
+          fi
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload entire site (preserve existing investment terminal)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy GitHub Pages
+        uses: actions/deploy-pages@v4
+        id: deploy
