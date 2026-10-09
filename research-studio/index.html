@@ -47,15 +47,15 @@
 <div class="infobox"><b>重要：</b>配分ルールは既存Excelの6段階モデル（10・30・100・300・500・1,000万円）を線形補間したものです。1万円未満の個別銘柄配分は分散コアに戻し、総額を一致させます。株価下落時の買い推奨や売買注文を自動発生させる仕組みではありません。</div></section>
 <section class="page" id="page-domestic">
  <div class="kicker">JAPAN EQUITIES / INTRADAY MONITOR</div><h2 class="heading">国内株｜取引時間中の価格を確認する。</h2>
- <p class="subheading">国内上場企業を専用表示。証券会社のPC用APIが接続されている場合のみ、実際の現在値を更新します。非接続時に過去の調査価格を「リアルタイム」と表示しません。</p>
+ <p class="subheading">国内上場企業を専用表示。現時点では2026年10月の調査時参考価格を掲載し、証券会社との接続や売買機能はありません。</p>
  <div class="market-tabs"><button class="market-tab active" data-nav="domestic">国内株（日本）</button><button class="market-tab" data-nav="overseas">海外株（米国・欧州）</button></div>
  <div class="market-summary"><div class="market-stat"><span class="stat-label">東証 現物株の立会時間 / 日本時間</span><strong>9:00–11:30 / 12:30–15:30</strong><small>土日・日本の祝日等は休場</small></div>
  <div class="market-stat"><span class="stat-label">価格接続状態</span><strong id="jpConnection">未接続</strong><small id="jpUpdated">Broker API接続が必要です</small></div>
  <div class="market-stat"><span class="stat-label">東証の取引状態（概算）</span><strong id="jpSession">判定中</strong><small>祝日・臨時休場は別途確認</small></div></div>
- <div class="safety-line">国内リアルタイム価格は、契約・認証済みの証券会社から本人のPCに取得する方式です。GitHub Pagesには有料株価や認証情報を公開しません。PC用接続プログラムを起動していない場合は「未接続」と表示します。注文送信機能はありません。</div>
+ <div class="safety-line">国内株は調査時の参考価格です。現在値の自動更新は未設定のため、売買判断の前に楽天証券等で最新価格を確認してください。このサイトからの注文送信はできません。</div>
  <div class="market-controls"><input class="searchinput" id="jpSearch" placeholder="日本の企業名・証券コードで検索" aria-label="日本株検索"><button class="btn line" id="jpRefresh">価格を更新</button><span class="secondary" id="jpAutoRefresh">ローカル接続時は10秒ごとに確認</span></div>
  <div class="tablewrap"><table><thead><tr><th>銘柄 / コード</th><th>テーマ</th><th>参考・現在値（円）</th><th>データ種別 / 時刻</th><th>優先度</th><th>分析</th></tr></thead><tbody id="jpRows"></tbody></table></div>
- <p class="note">国内価格取得方式：kabuステーションAPIを利用するローカル表示モードに対応。接続可能かどうかはご利用の証券会社、契約プラン、実行環境に依存します。</p>
+ <p class="note">楽天証券との接続は不要です。最新の国内株価を自動表示するには、別途利用許諾のある市場データ提供元が必要です。</p>
  </section>
  <section class="page" id="page-overseas">
  <div class="kicker">GLOBAL EQUITIES / LIMIT ORDER PLANNER</div><h2 class="heading">海外株｜朝の終値を基準に指値を考える。</h2>
@@ -140,7 +140,7 @@ async function loadQuotes(){
 
 function japanSession(){const d=new Date(),parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(d).map(x=>[x.type,x.value]));const week=['Sat','Sun'].includes(parts.weekday),m=Number(parts.hour)*60+Number(parts.minute);return week?'休日（土日）':m>=540&&m<690?'前場（取引中）':m>=750&&m<930?'後場（取引中）':m>=690&&m<750?'昼休み':'時間外';}
 async function loadDomestic(){
- if(location.protocol==='file:'){updateDomesticStatus();return;}
+ if(location.protocol==='file:' || !['localhost','127.0.0.1'].includes(location.hostname)){updateDomesticStatus();return;}
  try{
   const r=await fetch('/api/jp-quotes?ts='+Date.now(),{cache:'no-store',signal:AbortSignal.timeout(4500)});
   if(!r.ok)throw Error('broker bridge unavailable');
@@ -150,8 +150,8 @@ async function loadDomestic(){
  updateDomesticStatus();renderDomestic();renderDb();
 }
 function updateDomesticStatus(){const n=Object.keys(domesticFeed.quotes||{}).length,ok=n>0&&domesticFeed.status==='connected';
- el('jpConnection').textContent=ok?'接続中 / '+n+'銘柄':'未接続（参考値のみ）';el('jpConnection').className=ok?'state-live':'state-wait';
- el('jpUpdated').textContent=ok?'最終取得：'+(domesticFeed.updated_at||'—'):'PC用証券会社APIに接続してください';
+ el('jpConnection').textContent=ok?'接続中 / '+n+'銘柄':'参考値のみ（自動更新なし）';el('jpConnection').className=ok?'state-live':'state-wait';
+ el('jpUpdated').textContent=ok?'最終取得：'+(domesticFeed.updated_at||'—'):'国内株価は過去の調査時参考値です';
  el('jpSession').textContent=japanSession();}
 function renderDomestic(){const q=(el('jpSearch').value||'').toLowerCase().trim();const arr=getCompanies().filter(c=>c['所在国']==='日本'&&String(c['取引所']||'').startsWith('東証')&&(!q||[c['企業名／商品名'],c['証券コード'],c['投資テーマ']].join(' ').toLowerCase().includes(q)));
  el('jpRows').innerHTML=arr.map(c=>{const p=quoteInfo(c),code=String(c['証券コード']||'');return `<tr><td><button class="linkbtn" data-detail="${escapeHtml(code)}">${escapeHtml(c['企業名／商品名'])}</button><div class="ticode">${escapeHtml(code)}</div></td><td class="secondary">${escapeHtml(c['投資テーマ'])}</td><td class="number t-right">${prettyPrice(p)}</td><td><span class="${p.auto?'state-live':'state-wait'}">${escapeHtml(p.type)}</span><div class="secondary">${escapeHtml(p.date)}</div></td><td><span class="tag">${escapeHtml(c['優先順位']||'—')}</span></td><td><button class="sbtn" data-detail="${escapeHtml(code)}">詳細</button></td></tr>`}).join('')||'<tr><td colspan="6">銘柄が見つかりません</td></tr>';
