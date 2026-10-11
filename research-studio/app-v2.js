@@ -101,7 +101,7 @@ function scoreCompany(c){
  const parts={safety,v: v.score,cash,growth,durability:durability(c)};
  const weights={safety:30,v:25,cash:20,growth:15,durability:10};
  let covered=0,total=0;for(const k of Object.keys(weights)){if(parts[k]!==null){covered+=weights[k];total+=parts[k]*weights[k];}}
- const qualified=safety!==null&&v.score!==null&&covered>=70;
+ const qualified=safety!==null&&v.score!==null&&covered>=60;
  return {score:qualified?Math.round(total/covered):null,qualified,coverage:covered,safety,valuation:v,cash,growth,durability:parts.durability,parts,growthRaw:gr};
 }
 function dividend(c){return state.actions[symbolCode(c)]||null;}
@@ -137,7 +137,7 @@ function renderModel(){
 function rowHtml(c,index){
  const s=scoreCompany(c),d=dividend(c),code=symbolCode(c),p=price(c);
  const cls=relation(c)==='直接'?'green':relation(c)==='二次'?'purple':'';
- const rank=s.qualified?String(index)+'位':'保留';
+ const rank=s.qualified?String(index)+'位':String(index)+'位・調査';
  const star=c['共通度']==='★★★'?'<span class="stars"> ★★★</span>':'';
  const sign=s.qualified?'<b class="score">'+s.score+'点</b><br><small class="muted">根拠 '+s.coverage+'%</small>':'<span class="muted">指標不足</span>';
  const divLabel=d?'<span class="badge gold">配当IR確認</span>':'<span class="muted">未確認</span>';
@@ -165,11 +165,11 @@ function render(){
  $('kRated').textContent=count+' / '+all.length+'社';
  const q=$('search').value.trim().toLowerCase(),rel=$('relation').value,div=$('divFilter').value,sort=$('sort').value;
  let list=all.filter(({c})=>(!q||(String(c['企業名／商品名'])+' '+symbolCode(c)+' '+String(c['投資テーマ'])).toLowerCase().includes(q))&&(rel==='all'||relation(c)===rel)&&(div==='all'||(div==='verified'&&hasVerifiedDividend(c))||(div==='watch'&&state.watched.has(symbolCode(c)))));
- if(sort==='score')list.sort((a,b)=>(Number(b.s.qualified)-Number(a.s.qualified))||(b.s.score||0)-(a.s.score||0)||(b.s.coverage-a.s.coverage)||symbolCode(a.c).localeCompare(symbolCode(b.c)));
+ if(sort==='score')list.sort((a,b)=>(Number(b.s.qualified)-Number(a.s.qualified))||(b.s.score||0)-(a.s.score||0)||(b.s.safety??-1)-(a.s.safety??-1)||(b.s.coverage-a.s.coverage)||(parseInt(String(a.c['優先順位']).slice(1))||9)-(parseInt(String(b.c['優先順位']).slice(1))||9)||symbolCode(a.c).localeCompare(symbolCode(b.c)));
  if(sort==='name')list.sort((a,b)=>String(a.c['企業名／商品名']).localeCompare(String(b.c['企業名／商品名']),'ja'));
  if(sort==='per')list.sort((a,b)=>(numberMetric(a.c,'PER（倍）')??Infinity)-(numberMetric(b.c,'PER（倍）')??Infinity));
  let rank=0;
- $('rows').innerHTML=list.map(({c,s})=>rowHtml(c,s.qualified?++rank:0)).join('')||'<tr><td colspan="10">条件に合う銘柄がありません。</td></tr>';
+ $('rows').innerHTML=list.map(({c,s})=>rowHtml(c,++rank)).join('')||'<tr><td colspan="10">条件に合う銘柄がありません。</td></tr>';
  $('resultCount').textContent=list.length+'社を表示 / '+all.length+'社';
  renderNotice(stockSet());
 }
@@ -191,7 +191,7 @@ function showDetail(code){
  ['暫定優先順位',s.qualified?s.score+'点 /100（指標充足 '+s.coverage+'%）':'判定保留（指標充足 '+s.coverage+'%）'],
  ['関係の種類',relationName(c)+' / '+c['投資テーマ']],
  ['株価参考値',priceDisplay(c)+'　（'+marketValue(c)+' / '+p.date+' / '+p.origin+'）'],
- ['国内株の購入額目安',c['所在国']==='日本'?shareEstimate(c,Math.round(state.capital*.05))+'：仮に資金の5%を割当てた場合':'海外株：1株単位で円換算試算'],
+ ['参考購入株数（仮に予算の5%）',shareEstimate(c,Math.round(state.capital*.05))+'：特定銘柄へ予算の5%を割り当てた場合'],
  ['PER',ratio(c['PER（倍）'])],['PBR','データ未収録'],['PSR',ratio(c['P/S（倍）'])],['P/FCF',ratio(c['P/FCF（倍）'])],
  ['自己資本比率','データ未収録'],['ROE','データ未収録'],
  ['売上成長率・実績',pct(c['売上成長率実績'])+' / '+(c['実績対象期間']||'')],
