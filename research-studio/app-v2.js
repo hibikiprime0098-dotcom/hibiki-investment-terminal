@@ -7,10 +7,11 @@ const state={
  lot:['1','100','200'].includes(localStorage.getItem('irs_lot_mode'))?Number(localStorage.getItem('irs_lot_mode')):1,
  fx:{JPY:1,USD:Number(localStorage.getItem('irs_usdjpy'))||150,EUR:0,GBP:0},
  fxNote:'保存されたレート／仮設定。最新値ではありません。',
- companies:[],models:[],chains:[],actions:{},quotes:{},
+ companies:[],models:[],chains:[],actions:{},quotes:{},fundamentals:{},localQuotes:{},
  watched:new Set(),chartReady:false,loaded:false
 };
 try{const raw=JSON.parse(localStorage.getItem('irs2_watch')||'[]');state.watched=new Set(Array.isArray(raw)?raw:[]);}catch(_){}
+try{state.localQuotes=JSON.parse(localStorage.getItem('irs2_reference_quotes')||'{}')}catch(_){}
 const yenfmt=new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0});
 const nfmt=new Intl.NumberFormat('ja-JP',{maximumFractionDigits:2});
 function yen(n){return '¥'+yenfmt.format(Math.round(Number(n)||0));}
@@ -37,15 +38,17 @@ function parseCSV(source){
 async function fetchText(path){const r=await fetch(path+'?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error(path+' HTTP '+r.status);return r.text();}
 async function loadData(){
  try{
-  const [a,b,c,d,e]=await Promise.all([
+  const [a,b,c,d,e,g]=await Promise.all([
    fetchText('data/companies.csv'),
    fetchText('data/allocation_models.csv'),
    fetchText('data/value_chains.csv'),
    fetchText('data/corporate_actions.csv'),
-   fetchText('data/quotes.json').catch(()=>'{"quotes":{}}')
+   fetchText('data/quotes.json').catch(()=>'{"quotes":{}}'),
+   fetchText('data/fundamentals.json').catch(()=>'{"companies":{}}')
   ]);
   state.companies=parseCSV(a);state.models=parseCSV(b);state.chains=parseCSV(c);state.actions=Object.fromEntries(parseCSV(d).map(x=>[x['コード'],x]));
   try{const q=JSON.parse(e);state.quotes=q.quotes&&typeof q.quotes==='object'?q.quotes:{};}catch(_){}
+  try{const z=JSON.parse(g);state.fundamentals=z.companies&&typeof z.companies==='object'?z.companies:{};}catch(_){}
   if(state.companies.length<30)throw Error('企業データが不足');
   state.loaded=true;
   $('dataStatus').textContent=state.companies.length+'商品を登録 / 指標は時点値';
@@ -64,7 +67,8 @@ function price(c){
  let curr=c['所在国']==='日本'?'JPY':c['所在国']==='英国'?'GBP':c['所在国']==='フランス'?'EUR':'USD';
  let number=local,date=c['株価基準日']||'未確認',origin='調査時の参考価格';
  if(q&&Number(q.price)>0&&/^\d{4}-\d{2}-\d{2}$/.test(String(q.as_of||''))){number=Number(q.price);date=q.as_of;curr=q.currency||curr;origin='配信終値';}
- const fx=state.fx[curr];return {value:number,currency:curr,fx,JPY:number!==null&&fx>0?number*fx:null,date,origin};
+ const user=state.localQuotes[code];if(user&&Number(user.price)>0){number=Number(user.price);date=String(user.as_of||'入力日未確認');curr=user.currency||curr;origin='ユーザー入力の参考値';}
+ const fx=state.fx[curr];return {value:number,currency:curr,fx,JPY:number!==null&&fx>0?number*fx:null,date,origin,verified:origin==='配信終値'};
 }
 function priceDisplay(c){const p=price(c);return p.JPY===null?'円換算待ち':yen(p.JPY);}
 function marketValue(c){const p=price(c);return p.value===null?'株価未確認':p.currency+' '+nfmt.format(p.value);}
