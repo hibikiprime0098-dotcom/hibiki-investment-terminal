@@ -72,7 +72,23 @@ function price(c){
 }
 function priceDisplay(c){const p=price(c);return p.JPY===null?'円換算待ち':yen(p.JPY);}
 function marketValue(c){const p=price(c);return p.value===null?'株価未確認':p.currency+' '+nfmt.format(p.value);}
-function numberMetric(c,name){const v=nval(c[name]);return v!==null&&v>0?v:null;}
+function numberMetric(c,name){
+ const direct=nval(c[name]);if(direct!==null&&direct>0)return direct;
+ const f=state.fundamentals[symbolCode(c)];if(!f||c['所在国']!=='米国')return null;
+ const p=price(c);
+ // Ratios from SEC disclosures plus quoted market price. Never use a stale reference to claim a current ratio.
+ if(!(p.value>0)||p.currency!=='USD')return null;
+ const age=(Date.now()-Date.parse(String(p.date).slice(0,10)+'T00:00:00Z'))/86400000;
+ if(!Number.isFinite(age)||age<0||age>7)return null;
+ const eps=Number(f.eps),shares=Number(f.shares),equity=Number(f.equity),
+   revenue=Number(f.revenue),fcf=Number(f.fcf);
+ if(name==='PER（倍）'&&eps>0)return p.value/eps;
+ if(!(shares>0))return null;
+ if(name==='PBR（倍）'&&equity>0)return p.value*shares/equity;
+ if(name==='P/FCF（倍）'&&fcf>0)return p.value*shares/fcf;
+ if(name==='P/S（倍）'&&revenue>0)return p.value*shares/revenue;
+ return null;
+}
 function valuation(c){
  const pf=numberMetric(c,'P/FCF（倍）');const pe=numberMetric(c,'PER（倍）');const ps=numberMetric(c,'P/S（倍）');
  let x,label,cutoffs;
@@ -85,7 +101,15 @@ function valuation(c){
  return {score,label:label+' '+nfmt.format(x)+'倍'};
 }
 function rating(c){
- const raw=String(c['財務安全性（定性）']||'');const letter=(raw.match(/^([ABCD])/i)||[])[1];
+ const sec=state.fundamentals[symbolCode(c)],eq=Number(sec?.equityRatio);
+ const raw=String(c['財務安全性（定性）']||'');
+ if(sec&&Number.isFinite(eq)&&eq>=0&&eq<=1){
+  const measured=eq>=0.5?94:eq>=0.35?82:eq>=0.25?70:eq>=0.15?55:eq>=0.08?38:20;
+  const letter=(raw.match(/^([ABCD])/i)||[])[1];
+  const prev=letter?{A:91,B:74,C:43,D:19}[letter.toUpperCase()]:null;
+  return prev===null?measured:Math.round(measured*.6+prev*.4);
+ }
+const letter=(raw.match(/^([ABCD])/i)||[])[1];
  return letter?{A:91,B:74,C:43,D:19}[letter.toUpperCase()]:null;
 }
 function durability(c){
@@ -98,8 +122,9 @@ function durability(c){
 function scoreCompany(c){
  const safety=rating(c),v=valuation(c),pf=numberMetric(c,'P/FCF（倍）');
  const hasFcf=String(c['財務安全性（定性）']||'').includes('FCF');
- const cash=pf!==null?Math.max(22,Math.min(90,95-0.6*pf)):(hasFcf?64:null);
- const raw=plain(c['売上成長率予想'])||plain(c['売上成長率実績']);
+ const sec=state.fundamentals[symbolCode(c)],margin=Number(sec?.fcfMargin);
+ const cash=sec&&Number.isFinite(margin)?Math.max(5,Math.min(98,50+margin*190)):(pf!==null?Math.max(22,Math.min(90,95-.6*pf)):(hasFcf?64:null));
+ const raw=plain(c['売上成長率予想'])||plain(c['売上成長率実績'])||(state.fundamentals[symbolCode(c)]?.revenueGrowthYoY!=null?String(state.fundamentals[symbolCode(c)].revenueGrowthYoY):null);
  const gr=raw!==null&&Math.abs(Number(raw))<=2?Number(raw):null;
  const growth=gr===null?null:Math.max(8,Math.min(95,50+gr*145));
  const parts={safety,v: v.score,cash,growth,durability:durability(c)};
@@ -140,7 +165,7 @@ function scoreBreakdown(c,sc){
   const value=sc.parts[k];let reason='';
   if(k==='safety')reason='既存財務評価：'+(plain(c['財務安全性（定性）'])||'未確認')+'。A/B/C/D→91/74/43/19点に暫定換算。定量的な自己資本比率・負債の直接計算ではありません。';
   if(k==='v')reason=sc.valuation.label+'。P/FCF→PER→PSRの順に利用できる倍率を参照。低倍率だけでは適正価格を保証しません。';
-  if(k==='cash')reason='利用できるP/FCFをもとにした代理指標（ない場合は既存FCF記載の有無）。実際のFCF額・FCFマージンは未収録の場合があります。';
+  if(k==='cash')reason=state.fundamentals[symbolCode(c)]?.fcfMargin!=null?'SEC報告のFCFマージン '+pct(state.fundamentals[symbolCode(c)].fcfMargin)+'（営業CF−設備投資を年次売上で割った参考値）': 'P/FCFまたは既存FCFコメントの代理指標。実際のFCF額・マージンは未収録の可能性あり。';
   if(k==='growth')reason=(plain(c['売上成長率予想'])?'予想 '+pct(c['売上成長率予想'])+' / '+(c['予想対象期間']||'期間未記載'):'実績 '+pct(c['売上成長率実績'])+' / '+(c['実績対象期間']||'期間未記載'))+'。数字は財務資料の元データであり将来リターン確率ではありません。';
   if(k==='durability')reason='事業分散・専業度と主力事業の有無に基づく暫定定性換算。競合シェア・チャーンの検証は必要。';
   return {name,weight,value,earned:value===null?null:(value*weight/100),reason};
@@ -271,8 +296,8 @@ function showDetail(code){
  ['関係の種類',relationName(c)+' / '+c['投資テーマ']],
  ['株価参考値',priceDisplay(c)+'　（'+marketValue(c)+' / '+p.date+' / '+p.origin+'）'],
  ['参考購入株数（仮に予算の5%）',shareEstimate(c,Math.round(state.capital*.05))+'：特定銘柄へ予算の5%を割り当てた場合'],
- ['PER',ratio(c['PER（倍）'])],['PBR',ratio(c['PBR（倍）'])],['PSR',ratio(c['P/S（倍）'])],['P/FCF',ratio(c['P/FCF（倍）'])],
- ['自己資本比率',secMetric(c,'equityRatio','%')],
+ ['PER',ratio(numberMetric(c,'PER（倍）'))],['PBR',ratio(numberMetric(c,'PBR（倍）'))],['PSR',ratio(numberMetric(c,'P/S（倍）'))],['P/FCF',ratio(numberMetric(c,'P/FCF（倍）'))],
+ ['自己資本比率',secMetric(c,'equityRatio','%')],['FCFマージン',secMetric(c,'fcfMargin','%')],['SECの年次売上成長率',secMetric(c,'revenueGrowthYoY','%')],
  ['ROE',secMetric(c,'roe','%')],
  ['SECの直近財務報告',state.fundamentals[code]?('米国SEC開示 '+(state.fundamentals[code].period_end||'期間未確認')+' / '+(state.fundamentals[code].source||'')):'未連携・国内は企業IRから照合'],
  ['売上成長率・実績',pct(c['売上成長率実績'])+' / '+(c['実績対象期間']||'')],
