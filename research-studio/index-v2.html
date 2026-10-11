@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101f33"><title>Investment Research Studio｜国内・海外投資ランキング</title>
+<meta name="description" content="国内株・海外株を比較。財務安全性・割安度・キャッシュ創出力・成長性を根拠に投資優先順位を調査するサイト。">
+<link rel="stylesheet" href="./ui-v2.css"><link rel="icon" href="data:,"></head>
+<body><div class="layout">
+<aside class="sidebar"><div class="logo"><span class="logobox">IR</span><div><strong>Investment<br>Research Studio</strong><small>QUANTUM & CYBER</small></div></div>
+<p class="sidetitle">MARKET</p>
+<button class="sidebtn active" data-market="JP">国内株ランキング <span>JP</span></button>
+<button class="sidebtn" data-market="FOREIGN">海外株ランキング <span>GLOBAL</span></button>
+<div class="sidebar-note">2つの市場だけで投資候補を管理。直接関連・二次波及・間接関連は一覧の分類に統合。<hr>2026年10月時点の調査データに基づく暫定スコア。売買は楽天証券等で行ってください。</div>
+</aside>
+<main class="main">
+<header class="topbar"><div class="brandmobile">Investment Research Studio</div><div class="toplabel">LONG-TERM INVESTMENT / RESEARCH</div><div id="dataStatus" class="status">調査データを読み込み中</div></header>
+<nav class="mobile-tabs" aria-label="市場を選択"><button data-market="JP" class="active">国内株</button><button data-market="FOREIGN">海外株</button></nav>
+<div class="workspace">
+<div class="eyebrow">INVESTMENT PRIORITY</div><h1 id="marketTitle">国内株ランキング</h1>
+<p id="marketDescription" class="subtitle">財務・割安度・キャッシュ創出力を重視し、長期投資候補を比較します。</p>
+<div class="panel control-panel">
+<div class="budgetflex"><div><label class="label" for="capital">現在の投資可能額</label><div class="budgetfield"><input type="number" id="capital" min="0" max="50000" step="1" value="100" inputmode="numeric"><b>万円</b></div><p class="hint">10・11・12万円…と1万円刻みで入力できます。</p></div>
+<div class="controlright"><div><label class="label" for="usdjpy">円換算レート</label><div class="fxfield"><span>1 USD =</span><input id="usdjpy" type="number" min="1" step="0.01" value="150"><b>円</b></div><p id="fxStatus" class="hint">参考レート取得中</p></div><div><label class="label" for="jpLots">日本株の購入単位</label><select id="jpLots"><option value="1">1株ずつ</option><option value="100">100株単位</option><option value="200">200株単位</option></select><p class="hint">1株注文は楽天証券の対象銘柄のみ</p></div></div></div>
+<div class="kpis"><div><span>投資予定額</span><strong id="kTotal">—</strong></div><div><span>全世界株式へのモデル配分</span><strong id="kCore">—</strong></div><div><span>現在の市場のモデル配分</span><strong id="kMarket">—</strong></div><div><span>財務・評価データ充足</span><strong id="kRated">—</strong></div></div>
+<details id="modelDetails"><summary>企業別の目標額と購入株数を見る（既存Excelの配分モデル）</summary><div class="hint detailhint">この配分は既存Excelのモデルです。下の財務ランキングとは独立しており、順位が上がったから購入額が増えるわけではありません。</div><div id="modelRows" class="modelrows"></div></details>
+</div>
+<div id="marketNotice" class="notice" role="status" aria-live="polite"></div>
+<div class="sectionhead"><div><div class="eyebrow">EVIDENCE-BASED RANKING</div><h2 id="rankHeading">国内株｜投資優先順位</h2></div><button class="ghost" id="weightsToggle" aria-expanded="false">採点基準を確認</button></div>
+<div id="weightsPanel" class="panel weights" hidden><h3>長期・保守的投資の暫定評価（合計100点）</h3><div class="weightitems"><span><b>30点</b> 財務安全性</span><span><b>25点</b> 株価の割安度</span><span><b>20点</b> キャッシュ創出力</span><span><b>15点</b> 成長性</span><span><b>10点</b> 事業の持続性</span></div>
+<p>株主優待は0点（ランキングに影響しません）。自己資本比率・PBR・ROE・ネットキャッシュなど未収録の指標は推測せず、「未確認」のまま残します。既存データのみから算出した暫定順位のため、業種間の倍率比較や決算時点の差に注意してください。</p></div>
+<div class="filters panel"><label><span class="sr">検索</span><input id="search" placeholder="企業名・証券コードで検索"></label><label><span class="sr">事業との関連</span><select id="relation"><option value="all">関連性：すべて</option><option value="直接">直接関連</option><option value="二次">二次波及</option><option value="間接">間接・その他</option></select></label><label><span class="sr">絞り込み</span><select id="divFilter"><option value="all">配当：すべて</option><option value="verified">配当確認済み</option><option value="watch">★ ウォッチ中</option></select></label><label><span class="sr">並び順</span><select id="sort"><option value="score">優先順位順</option><option value="name">企業名順</option><option value="per">PER昇順（参考）</option></select></label><span id="resultCount" class="resultcount"></span></div>
+<div class="tablebox"><table class="companies"><thead><tr><th>順位</th><th>企業</th><th>区分</th><th>スコア</th><th>PER</th><th>PSR</th><th>P/FCF</th><th>円換算参考株価</th><th>配当</th><th>保存</th></tr></thead><tbody id="rows"><tr><td colspan="10">読み込み中…</td></tr></tbody></table></div>
+<div class="legend"><b>表示について</b>：ランキングの「保留」は投資不適格の意味ではなく、数値の根拠不足を示します。配当は会社IRで確認できた銘柄のみ「公表あり」と表示します。優待・配当の有無や条件は変わるため購入前に再確認してください。</div>
+<footer>Investment Research Studio · 調査・比較用。投資判断や収益を保証するものではありません。<br>
+<a href="https://github.com/hibikiprime0098-dotcom/hibiki-investment-terminal/tree/main/research-studio" target="_blank" rel="noopener">調査データと更新履歴（GitHub）</a></footer>
+</div></main></div>
+<div id="detailBackdrop" class="backdrop" hidden><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="detailTitle"><div class="dialoghead"><div><div class="eyebrow" id="detailSymbol">COMPANY PROFILE</div><h2 id="detailTitle"></h2></div><button id="closeDetail" class="close" aria-label="閉じる">×</button></div>
+<div class="dialogbody" id="detailBody"></div><div class="chartbox"><div class="charthead"><h3>株価チャート</h3><span>提供：TradingView（現地通貨・配信遅延の可能性）</span></div><div id="chartContainer"><p class="hint">チャートを読み込みます。</p></div><p class="hint" id="chartFallback"></p></div></div></div>
+<div class="toast" id="toast" aria-live="polite"></div>
+<script src="./app-v2.js" defer></script></body></html>
