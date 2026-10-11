@@ -53,7 +53,7 @@ async function loadData(){
   state.loaded=true;
   $('dataStatus').textContent=state.companies.length+'商品を登録 / 指標は時点値';
   render();
- }catch(err){$('dataStatus').textContent='データ読込エラー';$('rows').innerHTML='<tr><td colspan="10">企業データを読み込めませんでした。ページを再読み込みしてください。<br>'+esc(err.message)+'</td></tr>';}
+ }catch(err){$('dataStatus').textContent='データ読込エラー';$('rows').innerHTML='<tr><td colspan="14">企業データを読み込めませんでした。ページを再読み込みしてください。<br>'+esc(err.message)+'</td></tr>';}
 }
 function symbolCode(c){return String(c['証券コード']||'').trim();}
 function isCore(c){return symbolCode(c)==='全世界株式'||String(c['取引所']).includes('投資信託')||String(c['投資テーマ']).includes('テーマETF');}
@@ -116,16 +116,22 @@ function theme(c){
 }
 function roundingTarget(num){return num>=1000?Math.floor(num/10)*10:num>=100?Math.floor(num):Math.floor(num*10)/10;}
 function entryPlan(c){
- const p=price(c),score=scoreCompany(c);
- if(!(p.JPY>0))return null;
- const pe=numberMetric(c,'PER（倍）'),t=theme(c);
- let shallow=10,deep=20,why='一般的な長期投資における価格調整待ち幅';
- if((t==='量子'&&c['需要区分']==='直接')||(['3692','5574','5591','5132','4417','4398'].includes(symbolCode(c))&&!score.qualified)){shallow=20;deep=35;why='事業化・利益率・小型株の変動リスクが未検証のため保守的な待機幅';}
- else if(pe!==null&&pe>=35){shallow=20;deep=30;why='PER35倍以上の期待先行・高評価リスク';}
- else if((pe!==null&&pe>=28)||(t==='AI'&&c['需要区分']==='二次')){shallow=15;deep=25;why='高めのPERまたは景気循環のAIインフラ需要';}
- else if(pe!==null&&pe<20){shallow=8;deep=15;why='比較的低いPER。ただし業績悪化リスクは残る';}
- return {first:roundingTarget(p.JPY*(1-shallow/100)),second:roundingTarget(p.JPY*(1-deep/100)),
- ref:p.JPY,date:p.date,shallow,deep,why,qualified:score.qualified};
+ const p=price(c),sc=scoreCompany(c);if(!(p.JPY>0))return null;
+ const per=numberMetric(c,'PER（倍）'),t=theme(c),pbr=numberMetric(c,'PBR（倍）');
+ let buyWatch=10,buyTarget=20,sellWatch=20,sellTarget=40,why='標準的な長期投資の価格変動シナリオ';
+ if((t==='量子'&&c['需要区分']==='直接')||(['3692','5574','5591','5132','4417','4398'].includes(symbolCode(c))&&!sc.qualified)){
+  buyWatch=20;buyTarget=35;sellWatch=30;sellTarget=60;why='利益の予測困難さ・小型株の値動きの大きさ';
+ }else if(per!==null&&per>=35){buyWatch=20;buyTarget=30;sellWatch=15;sellTarget=30;why='高PERを踏まえた利益確定目安と買い急がない価格帯';}
+ else if((per!==null&&per>=28)||(t==='AI'&&c['需要区分']==='二次')){
+  buyWatch=15;buyTarget=25;sellWatch=20;sellTarget=40;why='比較的高いPERまたはAI設備サイクルへの依存';
+ }else if(per!==null&&per<20){buyWatch=8;buyTarget=15;sellWatch=25;sellTarget=45;why='PERが比較的低いが利益変動には注意';}
+ if(pbr!==null&&pbr>=8){buyTarget=Math.max(buyTarget,30);why+='。PBR8倍以上の高い純資産倍率';}
+ const age=Math.floor((Date.now()-new Date(String(p.date).slice(0,10)+'T00:00:00Z').getTime())/86400000);
+ const stale=!(age>=0&&age<=7);
+ return {ref:p.JPY,date:p.date,first:roundingTarget(p.JPY*(1-buyWatch/100)),second:roundingTarget(p.JPY*(1-buyTarget/100)),
+  sellFirst:roundingTarget(p.JPY*(1+sellWatch/100)),sellTarget:roundingTarget(p.JPY*(1+sellTarget/100)),
+  shallow:buyWatch,deep:buyTarget,sellWatch,sellTargetPct:sellTarget,why,qualified:sc.qualified,stale,
+  info:'参考株価を基点にした上下動シナリオ。予想EPS/DCFで導いた適正価格や確定売却推奨ではありません。'};
 }
 
 function scoreBreakdown(c,sc){
@@ -172,13 +178,20 @@ function renderModel(){
  }).join(''):'<p class="hint">現在の投資可能額では、この市場の個別株はモデル上まだ購入対象に入っていません。</p>';
 }
 function rowHtml(c,index){
- const s=scoreCompany(c),d=dividend(c),code=symbolCode(c),p=price(c);
- const cls=relation(c)==='直接'?'green':relation(c)==='二次'?'purple':'';
- const rank=s.qualified?String(index)+'位':String(index)+'位・調査';
- const star=c['共通度']==='★★★'?'<span class="stars"> ★★★</span>':'';
- const sign=s.qualified?'<b class="score">暫定 '+s.score+'点</b><br><small class="muted">根拠データ '+s.coverage+'%</small>':'<span class="muted">指標不足<br>充足 '+s.coverage+'%</span>';
- const entry=entryPlan(c);const divLabel=hasVerifiedDividend(c)?'<span class="badge gold">配当IR確認</span>':hasVerifiedBenefit(c)?'<span class="badge green">優待IR確認</span>':'<span class="muted">未確認</span>';
- return '<tr><td><span class="badge">'+rank+'</span></td><td><button class="companybtn" data-detail="'+esc(code)+'">'+esc(c['企業名／商品名'])+'</button>'+star+'<div class="code">'+esc(code)+' / '+esc(c['投資テーマ'])+'</div></td><td><span class="badge '+cls+'">'+esc(relationName(c))+'</span><br><small class="muted">'+esc(theme(c))+'</small></td><td>'+sign+'</td><td>'+ratio(c['PER（倍）'])+'</td><td>'+ratio(c['P/S（倍）'])+'</td><td>'+ratio(c['P/FCF（倍）'])+'</td><td class="price"><strong>'+esc(priceDisplay(c))+'</strong><small>'+esc(p.date)+' / '+esc(p.origin)+'</small></td><td class="price">'+(entry?('<strong>'+yen(entry.first)+'</strong><small>慎重 '+yen(entry.second)+'</small>'+(s.qualified?'':'<small>財務判断保留</small>')):'<small>価格未検証</small>')+'</td><td>'+divLabel+'</td><td><button class="watchbtn '+(state.watched.has(code)?'on':'')+'" data-watch="'+esc(code)+'" aria-label="ウォッチを切り替え">'+(state.watched.has(code)?'★':'☆')+'</button></td></tr>';
+ const sc=scoreCompany(c),code=symbolCode(c),p=price(c),e=entryPlan(c);
+ const relationClass=relation(c)==='直接'?'green':relation(c)==='二次'?'purple':'';
+ const rank=sc.qualified?index+'位':index+'位・調査';
+ const scoreLabel=sc.qualified?'<strong class="score">暫定 '+sc.score+'点</strong><small class="muted"> / 充足 '+sc.coverage+'%</small>':'<span class="muted">評価保留 / 充足 '+sc.coverage+'%</span>';
+ const dividendLabel=hasVerifiedDividend(c)?'<span class="badge gold">配当IR確認</span>':hasVerifiedBenefit(c)?'<span class="badge green">優待IR確認</span>':'<span class="muted">未確認</span>';
+ const cell=n=>e?'<strong>'+yen(n)+'</strong>'+(e.stale?'<small>基準日古い</small>':''):'<span class="muted">基準株価未取得</span>';
+ const reference=p.JPY>0?'<strong>'+yen(p.JPY)+'</strong><small>'+esc(p.date)+' / '+esc(p.origin)+(e?.stale?' / 古い':'')+'</small>':'<a href="'+esc(infoUrl(c['株価・評価資料URL'])||'https://www.tradingview.com/')+'" target="_blank" rel="noopener noreferrer">提供元で確認 ↗</a><small>CSV株価は未取得</small>';
+ return '<tr><td><span class="badge">'+esc(rank)+'</span></td>'+
+ '<td><button class="companybtn" data-detail="'+esc(code)+'">'+esc(c['企業名／商品名'])+'</button>'+(c['共通度']==='★★★'?'<span class="stars"> ★★★</span>':'')+'<div class="code">'+esc(code)+' / '+esc(theme(c))+'</div></td>'+
+ '<td><span class="badge '+relationClass+'">'+esc(relationName(c))+'</span></td><td>'+scoreLabel+'</td>'+
+ '<td>'+ratio(c['PER（倍）'])+'</td><td>'+ratio(c['P/S（倍）'])+'</td><td>'+ratio(c['P/FCF（倍）'])+'</td>'+
+ '<td class="price">'+reference+'</td><td class="price">'+cell(e?.first)+'</td><td class="price">'+cell(e?.second)+'</td>'+
+ '<td class="price">'+cell(e?.sellFirst)+'</td><td class="price">'+cell(e?.sellTarget)+'</td><td>'+dividendLabel+'</td>'+
+ '<td><button class="watchbtn '+(state.watched.has(code)?'on':'')+'" data-watch="'+esc(code)+'" aria-label="ウォッチを切り替え">'+(state.watched.has(code)?'★':'☆')+'</button></td></tr>';
 }
 function renderNotice(rows){
  const verified=rows.filter(c=>hasVerifiedDividend(c)||hasVerifiedBenefit(c)),watched=verified.filter(c=>state.watched.has(symbolCode(c)));
@@ -206,7 +219,7 @@ function render(){
  if(sort==='name')list.sort((a,b)=>String(a.c['企業名／商品名']).localeCompare(String(b.c['企業名／商品名']),'ja'));
  if(sort==='per')list.sort((a,b)=>(numberMetric(a.c,'PER（倍）')??Infinity)-(numberMetric(b.c,'PER（倍）')??Infinity));
  let rank=0;
- $('rows').innerHTML=list.map(({c,s})=>rowHtml(c,++rank)).join('')||'<tr><td colspan="11">条件に合う銘柄がありません。</td></tr>';
+ $('rows').innerHTML=list.map(({c,s})=>rowHtml(c,++rank)).join('')||'<tr><td colspan="14">条件に合う銘柄がありません。</td></tr>';
  $('resultCount').textContent=list.length+'社を表示 / '+all.length+'社';
  renderNotice(stockSet());
 }
