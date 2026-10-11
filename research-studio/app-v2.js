@@ -279,6 +279,9 @@ function showDetail(code){
  const s=scoreCompany(c),d=dividend(c),p=price(c),risk=c['主要リスク'],entry=entryPlan(c),parts=scoreBreakdown(c,s);
  $('detailSymbol').textContent=esc(code)+' / '+esc(c['所在国'])+' / '+esc(relationName(c));
  $('detailTitle').textContent=c['企業名／商品名'];
+ const levels=[['直近の取得株価',p.JPY>0?yen(p.JPY):'提供元で確認'],['買い検討開始',entry?yen(entry.first):'算定待ち'],['購入目標',entry?yen(entry.second):'算定待ち'],['売却検討開始',entry?yen(entry.sellFirst):'算定待ち'],['目標売却',entry?yen(entry.sellTarget):'算定待ち']];
+ $('priceSummary').innerHTML=levels.map(([label,value],i)=>'<div class="pricepill"><span>'+esc(label)+'</span><b>'+esc(value)+'</b></div>').join('')+
+ '<p class="hint" style="grid-column:1/-1;margin:3px 0">価格の基準：'+esc(p.date)+' / '+esc(p.origin)+(entry?.stale?'（参考価格は7日超前のため再確認が必要）':'')+'。売買の4段階は参考価格からの条件付きシナリオであり、適正株価を保証しません。</p>';
  const fields=[
  ['暫定優先順位',s.qualified?s.score+'点 /100（指標充足 '+s.coverage+'%）':'判定保留（指標充足 '+s.coverage+'%）'],
  ['指標充足率の意味','データが利用できた評価項目の配点合計'+s.coverage+'点/100点。65%や80%は将来の成功確率でも株価上昇確率でもありません。'],
@@ -339,7 +342,7 @@ function showDetail(code){
  script.async=true;script.textContent=JSON.stringify(cfg);
  $('chartContainer').querySelector('.tvbox').appendChild(script);
 }
-function closeDetail(){$('detailBackdrop').hidden=true;$('chartContainer').innerHTML='';$('symbolQuote').innerHTML='';$('symbolFinancials').innerHTML='';document.body.style.overflow='';}
+function closeDetail(){$('detailBackdrop').hidden=true;$('chartContainer').innerHTML='';$('symbolQuote').innerHTML='';$('symbolFinancials').innerHTML='';$('priceSummary').innerHTML='';document.body.style.overflow='';}
 async function loadFx(){
  const rates=['USD','EUR','GBP'];const found=await Promise.all(rates.map(async code=>{
  try{
