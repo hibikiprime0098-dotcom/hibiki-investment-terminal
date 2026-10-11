@@ -116,7 +116,7 @@ function entryPlan(c){
  if(!(p.JPY>0))return null;
  const pe=numberMetric(c,'PER（倍）'),t=theme(c);
  let shallow=10,deep=20,why='一般的な長期投資における価格調整待ち幅';
- if(t==='量子'&&c['需要区分']==='直接'){shallow=20;deep=35;why='量子事業化の不確実性を考慮';}
+ if((t==='量子'&&c['需要区分']==='直接')||(['3692','5574','5591','5132','4417','4398'].includes(symbolCode(c))&&!score.qualified)){shallow=20;deep=35;why='事業化・利益率・小型株の変動リスクが未検証のため保守的な待機幅';}
  else if(pe!==null&&pe>=35){shallow=20;deep=30;why='PER35倍以上の期待先行・高評価リスク';}
  else if((pe!==null&&pe>=28)||(t==='AI'&&c['需要区分']==='二次')){shallow=15;deep=25;why='高めのPERまたは景気循環のAIインフラ需要';}
  else if(pe!==null&&pe<20){shallow=8;deep=15;why='比較的低いPER。ただし業績悪化リスクは残る';}
@@ -172,9 +172,9 @@ function rowHtml(c,index){
  const cls=relation(c)==='直接'?'green':relation(c)==='二次'?'purple':'';
  const rank=s.qualified?String(index)+'位':String(index)+'位・調査';
  const star=c['共通度']==='★★★'?'<span class="stars"> ★★★</span>':'';
- const sign=s.qualified?'<b class="score">'+s.score+'点</b><br><small class="muted">充足 '+s.coverage+'%</small>':'<span class="muted">指標不足<br>充足 '+s.coverage+'%</span>';
+ const sign=s.qualified?'<b class="score">暫定 '+s.score+'点</b><br><small class="muted">根拠データ '+s.coverage+'%</small>':'<span class="muted">指標不足<br>充足 '+s.coverage+'%</span>';
  const entry=entryPlan(c);const divLabel=hasVerifiedDividend(c)?'<span class="badge gold">配当IR確認</span>':hasVerifiedBenefit(c)?'<span class="badge green">優待IR確認</span>':'<span class="muted">未確認</span>';
- return '<tr><td><span class="badge">'+rank+'</span></td><td><button class="companybtn" data-detail="'+esc(code)+'">'+esc(c['企業名／商品名'])+'</button>'+star+'<div class="code">'+esc(code)+' / '+esc(c['投資テーマ'])+'</div></td><td><span class="badge '+cls+'">'+esc(relationName(c))+'</span><br><small class="muted">'+esc(theme(c))+'</small></td><td>'+sign+'</td><td>'+ratio(c['PER（倍）'])+'</td><td>'+ratio(c['P/S（倍）'])+'</td><td>'+ratio(c['P/FCF（倍）'])+'</td><td class="price"><strong>'+esc(priceDisplay(c))+'</strong><small>'+esc(p.date)+' / '+esc(p.origin)+'</small></td><td class="price">'+(entry?('<strong>'+yen(entry.first)+'</strong><small>慎重 '+yen(entry.second)+'</small>'):'<small>価格未検証</small>')+'</td><td>'+divLabel+'</td><td><button class="watchbtn '+(state.watched.has(code)?'on':'')+'" data-watch="'+esc(code)+'" aria-label="ウォッチを切り替え">'+(state.watched.has(code)?'★':'☆')+'</button></td></tr>';
+ return '<tr><td><span class="badge">'+rank+'</span></td><td><button class="companybtn" data-detail="'+esc(code)+'">'+esc(c['企業名／商品名'])+'</button>'+star+'<div class="code">'+esc(code)+' / '+esc(c['投資テーマ'])+'</div></td><td><span class="badge '+cls+'">'+esc(relationName(c))+'</span><br><small class="muted">'+esc(theme(c))+'</small></td><td>'+sign+'</td><td>'+ratio(c['PER（倍）'])+'</td><td>'+ratio(c['P/S（倍）'])+'</td><td>'+ratio(c['P/FCF（倍）'])+'</td><td class="price"><strong>'+esc(priceDisplay(c))+'</strong><small>'+esc(p.date)+' / '+esc(p.origin)+'</small></td><td class="price">'+(entry?('<strong>'+yen(entry.first)+'</strong><small>慎重 '+yen(entry.second)+'</small>'+(s.qualified?'':'<small>財務判断保留</small>')):'<small>価格未検証</small>')+'</td><td>'+divLabel+'</td><td><button class="watchbtn '+(state.watched.has(code)?'on':'')+'" data-watch="'+esc(code)+'" aria-label="ウォッチを切り替え">'+(state.watched.has(code)?'★':'☆')+'</button></td></tr>';
 }
 function renderNotice(rows){
  const verified=rows.filter(c=>hasVerifiedDividend(c)||hasVerifiedBenefit(c)),watched=verified.filter(c=>state.watched.has(symbolCode(c)));
