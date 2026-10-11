@@ -222,6 +222,7 @@ function render(){
  $('rows').innerHTML=list.map(({c,s})=>rowHtml(c,++rank)).join('')||'<tr><td colspan="14">条件に合う銘柄がありません。</td></tr>';
  $('resultCount').textContent=list.length+'社を表示 / '+all.length+'社';
  renderNotice(stockSet());
+ if($('quotesOpen').parentElement.open)reloadMarketWidget();
 }
 function tradingSymbol(c){
  const code=symbolCode(c).replace(/[^A-Za-z0-9.]/g,'');const ex=String(c['取引所']||'').toUpperCase();
@@ -231,6 +232,22 @@ function tradingSymbol(c){
  if(c['所在国']==='英国')return 'LSE:'+code;
  if(c['所在国']==='フランス')return 'EURONEXT:'+code;
  return code;
+}
+
+function secMetric(c,key,kind){
+ const row=state.fundamentals[symbolCode(c)];const val=Number(row?.[key]);
+ if(!row||!Number.isFinite(val))return '未取得（SEC財務補完対象外／次回更新待ち）';
+ return kind==='%'?(val*100).toFixed(1)+'%':nfmt.format(val);
+}
+function reloadMarketWidget(){
+ const holder=$('marketWidget');holder.innerHTML='';
+ const all=stockSet().map(c=>({name:tradingSymbol(c),displayName:String(c['企業名／商品名']||c['証券コード'])}));
+ const group={name:state.market==='JP'?'日本株':'海外株',symbols:all};
+ const parent=document.createElement('div');parent.className='tradingview-widget-container';parent.style.cssText='width:100%;height:470px;overflow:hidden';
+ parent.innerHTML='<div class="tradingview-widget-container__widget"></div>';
+ const script=document.createElement('script');script.async=true;script.src='https://s3.tradingview.com/external-embedding/embed-widget-market-quotes.js';
+ script.textContent=JSON.stringify({title:'市場データ（配信遅延・取引所ごとの制約あり）',width:'100%',height:'100%',locale:'ja',showSymbolLogo:false,symbolsGroups:[group],colorTheme:'light'});
+ parent.appendChild(script);holder.appendChild(parent);
 }
 function showDetail(code){
  const c=state.companies.find(x=>symbolCode(x)===code);if(!c)return;
@@ -245,13 +262,19 @@ function showDetail(code){
  ['テーマ売上が利益につながる裏付け',c['収益化の根拠']||'売上・利益寄与の定量的検証待ち'],
  ['買付検討価格①',entry?yen(entry.first)+'（参考株価'+yen(entry.ref)+'から'+entry.shallow+'%調整）':'参考株価を確認するまで提示保留'],
  ['買付検討価格②',entry?yen(entry.second)+'（参考株価から'+entry.deep+'%調整）':'参考株価を確認するまで提示保留'],
- ['価格提案の考え方',entry?entry.why+'。'+(entry.qualified?'財務スコアは暫定計算済':'財務評価は未完了・価格だけのシナリオ')+'。'+entry.date+'の参考株価を基準にした調整待ち水準であり、EPS・DCFで算出した適正株価ではありません。':'価格・業績を確認後に提案'],
+ ['売却検討開始価格③',entry?yen(entry.sellFirst)+'（参考株価から+'+entry.sellWatch+'%、投資仮説と期待収益を再評価）':'参考株価を確認するまで提示保留'],
+ ['目標売却価格④',entry?yen(entry.sellTarget)+'（参考株価から+'+entry.sellTargetPct+'%、利益確定を検討する参考値）':'参考株価を確認するまで提示保留'],
+ ['基準株価のデータ品質',entry?(entry.stale?'7日超の過去価格に基づく試算。今の株価ではないため最新値の照合が必要':'原則7日以内の基準株価。終値/遅延値とリアルタイム値は異なる'): '参考株価未取得。TradingViewの銘柄画面から確認'],
+
+ ['価格提案の考え方',entry?entry.why+'。'+(entry.qualified?'財務スコアは暫定計算済':'財務評価は未完了・価格だけのシナリオ')+'。'+entry.date+'の参考株価を基準にしたシナリオで、適正価値の断定や売却推奨ではありません。':'価格・業績を確認後に提案'],
 
  ['関係の種類',relationName(c)+' / '+c['投資テーマ']],
  ['株価参考値',priceDisplay(c)+'　（'+marketValue(c)+' / '+p.date+' / '+p.origin+'）'],
  ['参考購入株数（仮に予算の5%）',shareEstimate(c,Math.round(state.capital*.05))+'：特定銘柄へ予算の5%を割り当てた場合'],
  ['PER',ratio(c['PER（倍）'])],['PBR',ratio(c['PBR（倍）'])],['PSR',ratio(c['P/S（倍）'])],['P/FCF',ratio(c['P/FCF（倍）'])],
- ['自己資本比率','データ未収録'],['ROE','データ未収録'],
+ ['自己資本比率',secMetric(c,'equityRatio','%')],
+ ['ROE',secMetric(c,'roe','%')],
+ ['SECの直近財務報告',state.fundamentals[code]?('米国SEC開示 '+(state.fundamentals[code].period_end||'期間未確認')+' / '+(state.fundamentals[code].source||'')):'未連携・国内は企業IRから照合'],
  ['売上成長率・実績',pct(c['売上成長率実績'])+' / '+(c['実績対象期間']||'')],
  ['売上成長率・予想',pct(c['売上成長率予想'])+' / '+(c['予想対象期間']||'')+'。会社予想か市場予想かは一次資料で要確認'],['予想値の調査根拠',c['業績・技術一次資料URL']||'資料未登録'],['評価指標の参照日',c['指標評価日']||'資料ごとの照合が必要'],
  ['財務安全性（既存評価）',plain(c['財務安全性（定性）'])||'未確認'],
@@ -261,17 +284,22 @@ function showDetail(code){
  ['配当金',d?'公式IRで配当公表を確認。'+(d['内容']||''):'公式IRの個別確認未済。無配と断定していません。'],
  ['配当資料の対象期間',d?.['対象期']||'—']
  ];
- let html='<div class="notice visible" style="display:block;margin:0 0 15px">このランキングの点数は株価の上昇確率ではありません。現時点の調査データに基づく暫定評価です。</div>';
+ let html='<div class="notice visible" style="display:block;margin:0 0 15px">このランキングの点数・買い／売りの4目安は株価の将来予測ではありません。財務指標、参考株価の基準日、条件付きシナリオを必ず確認してください。</div>';
+ html+='<div class="detailpriceinput"><label for="manualQuote"><b>確認した株価をこの画面の計算基準にする</b></label><div style="display:flex;gap:8px;margin-top:6px"><input id="manualQuote" type="number" min="0" step="0.01" placeholder="現地通貨で入力（例：123.45）" style="flex:1;padding:11px;border:1px solid #dbe6ef;border-radius:9px"><button class="watchbtn" id="saveQuote" data-quote-code="'+esc(code)+'">反映</button></div><p class="hint">TradingViewで確認した価格を入力すると、5つの価格の計算基準を更新します。入力値・通貨・日付はこのブラウザ内にのみ保存し、全訪問者の共通価格としては扱いません。</p></div>';
  html+=fields.map(x=>'<div class="fact"><b>'+esc(x[0])+'</b><div>'+esc(x[1]??'未確認')+'</div></div>').join('');
  html+='<h3 style="margin:25px 0 12px">各指標のスコア算定根拠</h3>'+parts.map(p=>'<div class="fact"><b>'+esc(p.name)+' '+p.weight+'点枠</b><div>'+esc(p.value===null?'未収録':p.value.toFixed(1)+'/100')+' → '+esc(p.earned===null?'判定除外':p.earned.toFixed(1)+'点')+'<br><span class="muted">'+esc(p.reason)+'</span></div></div>').join('');
  const chain=state.chains.filter(x=>x['コード']===code);
  if(chain.length){html+='<h3 style="margin:24px 0 5px">二次波及・需要の根拠</h3>'+chain.map(x=>'<div class="fact"><b>'+esc(x['バリューチェーン'])+'</b><div>'+esc(x['増える需要の起点'])+' → '+esc(x['買われる製品・役務'])+'<br><small class="muted">'+esc(x['利益化の限界']||'')+'</small></div></div>').join('');}
- const links=[['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['指標出典URL']||c['株価・評価資料URL']],['テーマの調査資料',c['業績・技術一次資料URL']],['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
+ const links=[['SEC XBRL元データ',state.fundamentals[code]?.source],['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['指標出典URL']||c['株価・評価資料URL']],['テーマの調査資料',c['業績・技術一次資料URL']],['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
  html+='<div class="linkrow">'+links.filter(x=>infoUrl(x[1])).map(x=>'<a href="'+esc(infoUrl(x[1]))+'" target="_blank" rel="noopener noreferrer">'+esc(x[0])+' ↗</a>').join('')+'</div>';
  $('detailBody').innerHTML=html;
  $('detailBackdrop').hidden=false;
  document.body.style.overflow='hidden';
  const sym=tradingSymbol(c),tv='https://www.tradingview.com/symbols/'+encodeURIComponent(sym.replace(':','-'))+'/';
+ const symbox=$('symbolQuote');symbox.innerHTML='<div class="tradingview-widget-container" style="width:100%;min-height:140px"><div class="tradingview-widget-container__widget"></div></div>';
+ const w=document.createElement('script');w.async=true;w.src='https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js';
+ w.textContent=JSON.stringify({symbol:sym,colorTheme:'light',isTransparent:false,locale:'ja',width:'100%'});
+ symbox.querySelector('.tradingview-widget-container').appendChild(w);
  $('chartContainer').innerHTML='<div class="tvbox"><div class="tradingview-widget-container__widget"></div></div>';
  $('chartFallback').innerHTML='チャートが表示されない場合は <a target="_blank" rel="noopener noreferrer" href="'+esc(tv)+'">TradingViewでこの銘柄を開く ↗</a>';
  if(!/^[A-Za-z0-9.:]+$/.test(sym))return;
@@ -281,7 +309,7 @@ function showDetail(code){
  script.async=true;script.textContent=JSON.stringify(cfg);
  $('chartContainer').querySelector('.tvbox').appendChild(script);
 }
-function closeDetail(){$('detailBackdrop').hidden=true;$('chartContainer').innerHTML='';document.body.style.overflow='';}
+function closeDetail(){$('detailBackdrop').hidden=true;$('chartContainer').innerHTML='';$('symbolQuote').innerHTML='';document.body.style.overflow='';}
 async function loadFx(){
  const rates=['USD','EUR','GBP'];const found=await Promise.all(rates.map(async code=>{
  try{
@@ -302,8 +330,16 @@ function init(){
  $('usdjpy').addEventListener('change',e=>{const v=Number(e.target.value);if(!(v>0))return;state.fx.USD=v;state.fxNote='USD/JPY手入力（最新値ではありません）';$('fxStatus').textContent=state.fxNote;localStorage.setItem('irs_usdjpy',String(v));if(state.loaded)render();});
  $('jpLots').addEventListener('change',e=>{state.lot=Number(e.target.value);localStorage.setItem('irs_lot_mode',String(state.lot));if(state.loaded)render();});
  ['search','theme','relation','divFilter','sort'].forEach(k=>$(k).addEventListener(k==='search'?'input':'change',()=>{if(state.loaded)render();}));
+ $('quotesOpen').parentElement.addEventListener('toggle',e=>{if(e.target.open)reloadMarketWidget();});
  $('weightsToggle').onclick=()=>{const pane=$('weightsPanel');pane.hidden=!pane.hidden;$('weightsToggle').setAttribute('aria-expanded',pane.hidden?'false':'true');};
  $('rows').onclick=e=>{const target=e.target.closest('[data-detail]');if(target){showDetail(target.dataset.detail);return;}const watch=e.target.closest('[data-watch]');if(watch){const code=watch.dataset.watch;if(state.watched.has(code))state.watched.delete(code);else state.watched.add(code);localStorage.setItem('irs2_watch',JSON.stringify([...state.watched]));render();toast('ウォッチ銘柄を更新しました');}};
+ $('detailBody').addEventListener('click',e=>{if(e.target.id!=='saveQuote')return;
+  const code=e.target.dataset.quoteCode,c=state.companies.find(x=>symbolCode(x)===code),val=Number($('manualQuote')?.value);
+  if(!c||!(val>0))return toast('正しい現地通貨の株価を入力してください');
+  const curr=c['所在国']==='日本'?'JPY':c['所在国']==='英国'?'GBP':c['所在国']==='フランス'?'EUR':'USD';
+  state.localQuotes[code]={price:val,currency:curr,as_of:new Date().toISOString().slice(0,10)};
+  localStorage.setItem('irs2_reference_quotes',JSON.stringify(state.localQuotes));showDetail(code);render();toast('確認した参考株価を5価格の基準に反映しました');
+ });
  $('closeDetail').onclick=closeDetail;
  $('detailBackdrop').onclick=e=>{if(e.target===$('detailBackdrop'))closeDetail();};
  window.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});
