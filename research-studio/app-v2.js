@@ -123,6 +123,19 @@ function entryPlan(c){
  return {first:roundingTarget(p.JPY*(1-shallow/100)),second:roundingTarget(p.JPY*(1-deep/100)),
  ref:p.JPY,date:p.date,shallow,deep,why,qualified:score.qualified};
 }
+
+function scoreBreakdown(c,sc){
+ const config=[['safety','財務安全性',30],['v','割安度',25],['cash','キャッシュ創出力',20],['growth','成長性',15],['durability','事業持続性',10]];
+ return config.map(([k,name,weight])=>{
+  const value=sc.parts[k];let reason='';
+  if(k==='safety')reason='既存財務評価：'+(plain(c['財務安全性（定性）'])||'未確認')+'。A/B/C/D→91/74/43/19点に暫定換算。定量的な自己資本比率・負債の直接計算ではありません。';
+  if(k==='v')reason=sc.valuation.label+'。P/FCF→PER→PSRの順に利用できる倍率を参照。低倍率だけでは適正価格を保証しません。';
+  if(k==='cash')reason='利用できるP/FCFをもとにした代理指標（ない場合は既存FCF記載の有無）。実際のFCF額・FCFマージンは未収録の場合があります。';
+  if(k==='growth')reason=(plain(c['売上成長率予想'])?'予想 '+pct(c['売上成長率予想'])+' / '+(c['予想対象期間']||'期間未記載'):'実績 '+pct(c['売上成長率実績'])+' / '+(c['実績対象期間']||'期間未記載'))+'。数字は財務資料の元データであり将来リターン確率ではありません。';
+  if(k==='durability')reason='事業分散・専業度と主力事業の有無に基づく暫定定性換算。競合シェア・チャーンの検証は必要。';
+  return {name,weight,value,earned:value===null?null:(value*weight/100),reason};
+ });
+}
 function dividend(c){return state.actions[symbolCode(c)]||null;}
 function hasVerifiedDividend(c){return dividend(c)?.['配当確認']==='公式IR確認済';}
 function hasVerifiedBenefit(c){return dividend(c)?.['優待確認']==='公式IR確認済';}
@@ -204,18 +217,26 @@ function tradingSymbol(c){
 }
 function showDetail(code){
  const c=state.companies.find(x=>symbolCode(x)===code);if(!c)return;
- const s=scoreCompany(c),d=dividend(c),p=price(c),risk=c['主要リスク'];
+ const s=scoreCompany(c),d=dividend(c),p=price(c),risk=c['主要リスク'],entry=entryPlan(c),parts=scoreBreakdown(c,s);
  $('detailSymbol').textContent=esc(code)+' / '+esc(c['所在国'])+' / '+esc(relationName(c));
  $('detailTitle').textContent=c['企業名／商品名'];
  const fields=[
  ['暫定優先順位',s.qualified?s.score+'点 /100（指標充足 '+s.coverage+'%）':'判定保留（指標充足 '+s.coverage+'%）'],
+ ['指標充足率の意味','データが利用できた評価項目の配点合計'+s.coverage+'点/100点。65%や80%は将来の成功確率でも株価上昇確率でもありません。'],
+ ['主テーマと関連分類',theme(c)+' / '+relationName(c)],
+ ['テーマとの関係を示す根拠',c['テーマの根拠']||c['投資理由']],
+ ['テーマ売上が利益につながる裏付け',c['収益化の根拠']||'売上・利益寄与の定量的検証待ち'],
+ ['買付検討価格①',entry?yen(entry.first)+'（参考株価'+yen(entry.ref)+'から'+entry.shallow+'%調整）':'参考株価を確認するまで提示保留'],
+ ['買付検討価格②',entry?yen(entry.second)+'（参考株価から'+entry.deep+'%調整）':'参考株価を確認するまで提示保留'],
+ ['価格提案の考え方',entry?entry.why+'。'+(entry.qualified?'財務スコアは暫定計算済':'財務評価は未完了・価格だけのシナリオ')+'。'+entry.date+'の参考株価を基準にした調整待ち水準であり、EPS・DCFで算出した適正株価ではありません。':'価格・業績を確認後に提案'],
+
  ['関係の種類',relationName(c)+' / '+c['投資テーマ']],
  ['株価参考値',priceDisplay(c)+'　（'+marketValue(c)+' / '+p.date+' / '+p.origin+'）'],
  ['参考購入株数（仮に予算の5%）',shareEstimate(c,Math.round(state.capital*.05))+'：特定銘柄へ予算の5%を割り当てた場合'],
- ['PER',ratio(c['PER（倍）'])],['PBR','データ未収録'],['PSR',ratio(c['P/S（倍）'])],['P/FCF',ratio(c['P/FCF（倍）'])],
+ ['PER',ratio(c['PER（倍）'])],['PBR',ratio(c['PBR（倍）'])],['PSR',ratio(c['P/S（倍）'])],['P/FCF',ratio(c['P/FCF（倍）'])],
  ['自己資本比率','データ未収録'],['ROE','データ未収録'],
  ['売上成長率・実績',pct(c['売上成長率実績'])+' / '+(c['実績対象期間']||'')],
- ['売上成長率・予想',pct(c['売上成長率予想'])+' / '+(c['予想対象期間']||'')],
+ ['売上成長率・予想',pct(c['売上成長率予想'])+' / '+(c['予想対象期間']||'')+'。会社予想か市場予想かは一次資料で要確認'],['予想値の調査根拠',c['業績・技術一次資料URL']||'資料未登録'],['評価指標の参照日',c['指標評価日']||'資料ごとの照合が必要'],
  ['財務安全性（既存評価）',plain(c['財務安全性（定性）'])||'未確認'],
  ['事業の持続性','暫定定性評価（保守的な業種・分散性ルール）'],
  ['投資理由',c['投資理由']],['競争優位性',c['競争優位性']],['主なリスク',risk],['買う前に確認する論点',c['購入判断の論点']],
@@ -223,10 +244,12 @@ function showDetail(code){
  ['配当金',d?'公式IRで配当公表を確認。'+(d['内容']||''):'公式IRの個別確認未済。無配と断定していません。'],
  ['配当資料の対象期間',d?.['対象期']||'—']
  ];
- let html=fields.map(x=>'<div class="fact"><b>'+esc(x[0])+'</b><div>'+esc(x[1]??'未確認')+'</div></div>').join('');
+ let html='<div class="notice visible" style="display:block;margin:0 0 15px">このランキングの点数は株価の上昇確率ではありません。現時点の調査データに基づく暫定評価です。</div>';
+ html+=fields.map(x=>'<div class="fact"><b>'+esc(x[0])+'</b><div>'+esc(x[1]??'未確認')+'</div></div>').join('');
+ html+='<h3 style="margin:25px 0 12px">各指標のスコア算定根拠</h3>'+parts.map(p=>'<div class="fact"><b>'+esc(p.name)+' '+p.weight+'点枠</b><div>'+esc(p.value===null?'未収録':p.value.toFixed(1)+'/100')+' → '+esc(p.earned===null?'判定除外':p.earned.toFixed(1)+'点')+'<br><span class="muted">'+esc(p.reason)+'</span></div></div>').join('');
  const chain=state.chains.filter(x=>x['コード']===code);
  if(chain.length){html+='<h3 style="margin:24px 0 5px">二次波及・需要の根拠</h3>'+chain.map(x=>'<div class="fact"><b>'+esc(x['バリューチェーン'])+'</b><div>'+esc(x['増える需要の起点'])+' → '+esc(x['買われる製品・役務'])+'<br><small class="muted">'+esc(x['利益化の限界']||'')+'</small></div></div>').join('');}
- const links=[['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['株価・評価資料URL']],['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
+ const links=[['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['指標出典URL']||c['株価・評価資料URL']],['テーマの調査資料',c['業績・技術一次資料URL']],['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
  html+='<div class="linkrow">'+links.filter(x=>infoUrl(x[1])).map(x=>'<a href="'+esc(infoUrl(x[1]))+'" target="_blank" rel="noopener noreferrer">'+esc(x[0])+' ↗</a>').join('')+'</div>';
  $('detailBody').innerHTML=html;
  $('detailBackdrop').hidden=false;
