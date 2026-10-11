@@ -148,8 +148,11 @@ def main():
     document={"updated_at":dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
               "provider":"U.S. SEC EDGAR companyfacts, issuer filings",
               "attempted":len(tickers),"updated":done,"companies":companies,"errors":errors[:60]}
-    # Do not overwrite previously obtained valid company data with failures.
-    OUT.write_text(json.dumps(document,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    # Preserve verified historical disclosures if upstream is blocked.
+    if done > 0:
+        OUT.write_text(json.dumps(document,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    else:
+        print("SEC fetch yielded 0 usable issuer records; existing snapshot unchanged")
     print("SEC fundamentals refreshed:",done,"/",len(tickers),"stored:",len(companies))
     if errors:
         print("Examples of unavailable facts:",errors[:8])
