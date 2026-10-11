@@ -34,14 +34,17 @@ jobs:
         env:
           ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
         run: python research-studio/scripts/update_prices.py
-      - name: Save refreshed quotes
-        if: github.event_name != 'push'
+      - name: Pull US issuer financials from official SEC EDGAR
+        env:
+          SEC_USER_AGENT: "InvestmentResearchStudio/1.0 (github-actions[bot]@users.noreply.github.com)"
+        run: python research-studio/scripts/update_fundamentals_sec.py
+      - name: Save updated research data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add research-studio/data/quotes.json
+          git add research-studio/data/quotes.json research-studio/data/fundamentals.json
           if ! git diff --cached --quiet; then
-            git commit -m "data: refresh research quotes"
+            git commit -m "data: update sourced research fundamentals and EOD quotes"
             git push origin HEAD:main
           fi
       - name: Configure GitHub Pages
