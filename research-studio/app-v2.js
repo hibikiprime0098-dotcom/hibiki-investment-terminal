@@ -299,6 +299,7 @@ function showDetail(code){
  ['PER',ratio(numberMetric(c,'PER（倍）'))],['PBR',ratio(numberMetric(c,'PBR（倍）'))],['PSR',ratio(numberMetric(c,'P/S（倍）'))],['P/FCF',ratio(numberMetric(c,'P/FCF（倍）'))],
  ['自己資本比率',secMetric(c,'equityRatio','%')],['FCFマージン',secMetric(c,'fcfMargin','%')],['SECの年次売上成長率',secMetric(c,'revenueGrowthYoY','%')],
  ['ROE',secMetric(c,'roe','%')],
+ ['利用できる最新の財務表示','下部のTradingView財務ウィジェットに、売上高・利益・財務比率の提供元データを表示します。埋め込みの数値は当サイトのランキング点数に自動転記されません。'],
  ['SECの直近財務報告',state.fundamentals[code]?('米国SEC開示 '+(state.fundamentals[code].period_end||'期間未確認')+' / '+(state.fundamentals[code].source||'')):'未連携・国内は企業IRから照合'],
  ['売上成長率・実績',pct(c['売上成長率実績'])+' / '+(c['実績対象期間']||'')],
  ['売上成長率・予想',pct(c['売上成長率予想'])+' / '+(c['予想対象期間']||'')+'。会社予想か市場予想かは一次資料で要確認'],['予想値の調査根拠',c['業績・技術一次資料URL']||'資料未登録'],['評価指標の参照日',c['指標評価日']||'資料ごとの照合が必要'],
@@ -325,6 +326,10 @@ function showDetail(code){
  const w=document.createElement('script');w.async=true;w.src='https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js';
  w.textContent=JSON.stringify({symbol:sym,colorTheme:'light',isTransparent:false,locale:'ja',width:'100%'});
  symbox.querySelector('.tradingview-widget-container').appendChild(w);
+ const fin=$('symbolFinancials');fin.innerHTML='<div class="tradingview-widget-container" style="width:100%;min-height:570px"><div class="tradingview-widget-container__widget"></div></div>';
+ const fscript=document.createElement('script');fscript.async=true;fscript.src='https://s3.tradingview.com/external-embedding/embed-widget-financials.js';
+ fscript.textContent=JSON.stringify({symbol:sym,colorTheme:'light',displayMode:'regular',isTransparent:false,locale:'ja',width:'100%',height:570});
+ fin.querySelector('.tradingview-widget-container').appendChild(fscript);
  $('chartContainer').innerHTML='<div class="tvbox"><div class="tradingview-widget-container__widget"></div></div>';
  $('chartFallback').innerHTML='チャートが表示されない場合は <a target="_blank" rel="noopener noreferrer" href="'+esc(tv)+'">TradingViewでこの銘柄を開く ↗</a>';
  if(!/^[A-Za-z0-9.:]+$/.test(sym))return;
@@ -334,7 +339,7 @@ function showDetail(code){
  script.async=true;script.textContent=JSON.stringify(cfg);
  $('chartContainer').querySelector('.tvbox').appendChild(script);
 }
-function closeDetail(){$('detailBackdrop').hidden=true;$('chartContainer').innerHTML='';$('symbolQuote').innerHTML='';document.body.style.overflow='';}
+function closeDetail(){$('detailBackdrop').hidden=true;$('chartContainer').innerHTML='';$('symbolQuote').innerHTML='';$('symbolFinancials').innerHTML='';document.body.style.overflow='';}
 async function loadFx(){
  const rates=['USD','EUR','GBP'];const found=await Promise.all(rates.map(async code=>{
  try{
