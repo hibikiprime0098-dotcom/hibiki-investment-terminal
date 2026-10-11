@@ -104,6 +104,25 @@ function scoreCompany(c){
  const qualified=safety!==null&&v.score!==null&&covered>=60;
  return {score:qualified?Math.round(total/covered):null,qualified,coverage:covered,safety,valuation:v,cash,growth,durability:parts.durability,parts,growthRaw:gr};
 }
+
+function theme(c){
+ if(plain(c['主テーマ']))return c['主テーマ'];
+ const t=String(c['投資テーマ']||'');
+ return /サイバー|セキュリティ|PQC/.test(t)?'サイバー':/量子/.test(t)?'量子':'AI';
+}
+function roundingTarget(num){return num>=1000?Math.floor(num/10)*10:num>=100?Math.floor(num):Math.floor(num*10)/10;}
+function entryPlan(c){
+ const p=price(c),score=scoreCompany(c);
+ if(!(p.JPY>0))return null;
+ const pe=numberMetric(c,'PER（倍）'),t=theme(c);
+ let shallow=10,deep=20,why='一般的な長期投資における価格調整待ち幅';
+ if(t==='量子'&&c['需要区分']==='直接'){shallow=20;deep=35;why='量子事業化の不確実性を考慮';}
+ else if(pe!==null&&pe>=35){shallow=20;deep=30;why='PER35倍以上の期待先行・高評価リスク';}
+ else if((pe!==null&&pe>=28)||(t==='AI'&&c['需要区分']==='二次')){shallow=15;deep=25;why='高めのPERまたは景気循環のAIインフラ需要';}
+ else if(pe!==null&&pe<20){shallow=8;deep=15;why='比較的低いPER。ただし業績悪化リスクは残る';}
+ return {first:roundingTarget(p.JPY*(1-shallow/100)),second:roundingTarget(p.JPY*(1-deep/100)),
+ ref:p.JPY,date:p.date,shallow,deep,why,qualified:score.qualified};
+}
 function dividend(c){return state.actions[symbolCode(c)]||null;}
 function hasVerifiedDividend(c){return dividend(c)?.['配当確認']==='公式IR確認済';}
 function hasVerifiedBenefit(c){return dividend(c)?.['優待確認']==='公式IR確認済';}
@@ -140,9 +159,9 @@ function rowHtml(c,index){
  const cls=relation(c)==='直接'?'green':relation(c)==='二次'?'purple':'';
  const rank=s.qualified?String(index)+'位':String(index)+'位・調査';
  const star=c['共通度']==='★★★'?'<span class="stars"> ★★★</span>':'';
- const sign=s.qualified?'<b class="score">'+s.score+'点</b><br><small class="muted">根拠 '+s.coverage+'%</small>':'<span class="muted">指標不足</span>';
- const divLabel=hasVerifiedDividend(c)?'<span class="badge gold">配当IR確認</span>':hasVerifiedBenefit(c)?'<span class="badge green">優待IR確認</span>':'<span class="muted">未確認</span>';
- return '<tr><td><span class="badge">'+rank+'</span></td><td><button class="companybtn" data-detail="'+esc(code)+'">'+esc(c['企業名／商品名'])+'</button>'+star+'<div class="code">'+esc(code)+' / '+esc(c['投資テーマ'])+'</div></td><td><span class="badge '+cls+'">'+esc(relationName(c))+'</span></td><td>'+sign+'</td><td>'+ratio(c['PER（倍）'])+'</td><td>'+ratio(c['P/S（倍）'])+'</td><td>'+ratio(c['P/FCF（倍）'])+'</td><td class="price"><strong>'+esc(priceDisplay(c))+'</strong><small>'+esc(p.date)+' / '+esc(p.origin)+'</small></td><td>'+divLabel+'</td><td><button class="watchbtn '+(state.watched.has(code)?'on':'')+'" data-watch="'+esc(code)+'" aria-label="ウォッチを切り替え">'+(state.watched.has(code)?'★':'☆')+'</button></td></tr>';
+ const sign=s.qualified?'<b class="score">'+s.score+'点</b><br><small class="muted">充足 '+s.coverage+'%</small>':'<span class="muted">指標不足<br>充足 '+s.coverage+'%</span>';
+ const entry=entryPlan(c);const divLabel=hasVerifiedDividend(c)?'<span class="badge gold">配当IR確認</span>':hasVerifiedBenefit(c)?'<span class="badge green">優待IR確認</span>':'<span class="muted">未確認</span>';
+ return '<tr><td><span class="badge">'+rank+'</span></td><td><button class="companybtn" data-detail="'+esc(code)+'">'+esc(c['企業名／商品名'])+'</button>'+star+'<div class="code">'+esc(code)+' / '+esc(c['投資テーマ'])+'</div></td><td><span class="badge '+cls+'">'+esc(relationName(c))+'</span><br><small class="muted">'+esc(theme(c))+'</small></td><td>'+sign+'</td><td>'+ratio(c['PER（倍）'])+'</td><td>'+ratio(c['P/S（倍）'])+'</td><td>'+ratio(c['P/FCF（倍）'])+'</td><td class="price"><strong>'+esc(priceDisplay(c))+'</strong><small>'+esc(p.date)+' / '+esc(p.origin)+'</small></td><td class="price">'+(entry?('<strong>'+yen(entry.first)+'</strong><small>慎重 '+yen(entry.second)+'</small>'):'<small>価格未検証</small>')+'</td><td>'+divLabel+'</td><td><button class="watchbtn '+(state.watched.has(code)?'on':'')+'" data-watch="'+esc(code)+'" aria-label="ウォッチを切り替え">'+(state.watched.has(code)?'★':'☆')+'</button></td></tr>';
 }
 function renderNotice(rows){
  const verified=rows.filter(c=>hasVerifiedDividend(c)||hasVerifiedBenefit(c)),watched=verified.filter(c=>state.watched.has(symbolCode(c)));
@@ -164,13 +183,13 @@ function render(){
  renderModel();
  const all=stockSet().map(c=>({c,s:scoreCompany(c)}));const count=all.filter(x=>x.s.qualified).length;
  $('kRated').textContent=count+' / '+all.length+'社';
- const q=$('search').value.trim().toLowerCase(),rel=$('relation').value,div=$('divFilter').value,sort=$('sort').value;
- let list=all.filter(({c})=>(!q||(String(c['企業名／商品名'])+' '+symbolCode(c)+' '+String(c['投資テーマ'])).toLowerCase().includes(q))&&(rel==='all'||relation(c)===rel)&&(div==='all'||(div==='verified'&&(hasVerifiedDividend(c)||hasVerifiedBenefit(c)))||(div==='watch'&&state.watched.has(symbolCode(c)))));
+ const q=$('search').value.trim().toLowerCase(),rel=$('relation').value,div=$('divFilter').value,sort=$('sort').value,themeFilter=$('theme').value;
+ let list=all.filter(({c})=>(!q||(String(c['企業名／商品名'])+' '+symbolCode(c)+' '+String(c['投資テーマ'])).toLowerCase().includes(q))&&(rel==='all'||relation(c)===rel)&&(themeFilter==='all'||theme(c)===themeFilter)&&(div==='all'||(div==='verified'&&(hasVerifiedDividend(c)||hasVerifiedBenefit(c)))||(div==='watch'&&state.watched.has(symbolCode(c)))));
  if(sort==='score')list.sort((a,b)=>(Number(b.s.qualified)-Number(a.s.qualified))||(b.s.score||0)-(a.s.score||0)||(b.s.safety??-1)-(a.s.safety??-1)||(b.s.coverage-a.s.coverage)||(parseInt(String(a.c['優先順位']).slice(1))||9)-(parseInt(String(b.c['優先順位']).slice(1))||9)||symbolCode(a.c).localeCompare(symbolCode(b.c)));
  if(sort==='name')list.sort((a,b)=>String(a.c['企業名／商品名']).localeCompare(String(b.c['企業名／商品名']),'ja'));
  if(sort==='per')list.sort((a,b)=>(numberMetric(a.c,'PER（倍）')??Infinity)-(numberMetric(b.c,'PER（倍）')??Infinity));
  let rank=0;
- $('rows').innerHTML=list.map(({c,s})=>rowHtml(c,++rank)).join('')||'<tr><td colspan="10">条件に合う銘柄がありません。</td></tr>';
+ $('rows').innerHTML=list.map(({c,s})=>rowHtml(c,++rank)).join('')||'<tr><td colspan="11">条件に合う銘柄がありません。</td></tr>';
  $('resultCount').textContent=list.length+'社を表示 / '+all.length+'社';
  renderNotice(stockSet());
 }
@@ -238,11 +257,11 @@ async function loadFx(){
  if(state.loaded)render();
 }
 function init(){
- document.querySelectorAll('[data-market]').forEach(b=>b.addEventListener('click',()=>{state.market=b.dataset.market;localStorage.setItem('irs2_market',state.market);$('search').value='';$('relation').value='all';$('divFilter').value='all';$('sort').value='score';render();window.scrollTo({top:0,behavior:'smooth'});}));
+ document.querySelectorAll('[data-market]').forEach(b=>b.addEventListener('click',()=>{state.market=b.dataset.market;localStorage.setItem('irs2_market',state.market);$('search').value='';$('theme').value='all';$('relation').value='all';$('divFilter').value='all';$('sort').value='score';render();window.scrollTo({top:0,behavior:'smooth'});}));
  $('capital').addEventListener('input',e=>{if(e.target.value==='')return;let v=Math.max(0,Math.min(50000,Math.floor(Number(e.target.value))));if(!Number.isFinite(v))return;state.capital=v*10000;localStorage.setItem('irs_budget',String(state.capital));if(state.loaded)render();});
  $('usdjpy').addEventListener('change',e=>{const v=Number(e.target.value);if(!(v>0))return;state.fx.USD=v;state.fxNote='USD/JPY手入力（最新値ではありません）';$('fxStatus').textContent=state.fxNote;localStorage.setItem('irs_usdjpy',String(v));if(state.loaded)render();});
  $('jpLots').addEventListener('change',e=>{state.lot=Number(e.target.value);localStorage.setItem('irs_lot_mode',String(state.lot));if(state.loaded)render();});
- ['search','relation','divFilter','sort'].forEach(k=>$(k).addEventListener(k==='search'?'input':'change',()=>{if(state.loaded)render();}));
+ ['search','theme','relation','divFilter','sort'].forEach(k=>$(k).addEventListener(k==='search'?'input':'change',()=>{if(state.loaded)render();}));
  $('weightsToggle').onclick=()=>{const pane=$('weightsPanel');pane.hidden=!pane.hidden;$('weightsToggle').setAttribute('aria-expanded',pane.hidden?'false':'true');};
  $('rows').onclick=e=>{const target=e.target.closest('[data-detail]');if(target){showDetail(target.dataset.detail);return;}const watch=e.target.closest('[data-watch]');if(watch){const code=watch.dataset.watch;if(state.watched.has(code))state.watched.delete(code);else state.watched.add(code);localStorage.setItem('irs2_watch',JSON.stringify([...state.watched]));render();toast('ウォッチ銘柄を更新しました');}};
  $('closeDetail').onclick=closeDetail;
