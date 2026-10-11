@@ -106,6 +106,7 @@ function scoreCompany(c){
 }
 function dividend(c){return state.actions[symbolCode(c)]||null;}
 function hasVerifiedDividend(c){return dividend(c)?.['配当確認']==='公式IR確認済';}
+function hasVerifiedBenefit(c){return dividend(c)?.['優待確認']==='公式IR確認済';}
 function infoUrl(url){try{const u=new URL(url);return ['http:','https:'].includes(u.protocol)?u.href:null;}catch(_){return null;}}
 function modelTargets(amount){
  const axes=[10,30,100,300,500,1000];const man=amount/10000;const out=[];
@@ -140,14 +141,14 @@ function rowHtml(c,index){
  const rank=s.qualified?String(index)+'位':String(index)+'位・調査';
  const star=c['共通度']==='★★★'?'<span class="stars"> ★★★</span>':'';
  const sign=s.qualified?'<b class="score">'+s.score+'点</b><br><small class="muted">根拠 '+s.coverage+'%</small>':'<span class="muted">指標不足</span>';
- const divLabel=d?'<span class="badge gold">配当IR確認</span>':'<span class="muted">未確認</span>';
+ const divLabel=hasVerifiedDividend(c)?'<span class="badge gold">配当IR確認</span>':hasVerifiedBenefit(c)?'<span class="badge green">優待IR確認</span>':'<span class="muted">未確認</span>';
  return '<tr><td><span class="badge">'+rank+'</span></td><td><button class="companybtn" data-detail="'+esc(code)+'">'+esc(c['企業名／商品名'])+'</button>'+star+'<div class="code">'+esc(code)+' / '+esc(c['投資テーマ'])+'</div></td><td><span class="badge '+cls+'">'+esc(relationName(c))+'</span></td><td>'+sign+'</td><td>'+ratio(c['PER（倍）'])+'</td><td>'+ratio(c['P/S（倍）'])+'</td><td>'+ratio(c['P/FCF（倍）'])+'</td><td class="price"><strong>'+esc(priceDisplay(c))+'</strong><small>'+esc(p.date)+' / '+esc(p.origin)+'</small></td><td>'+divLabel+'</td><td><button class="watchbtn '+(state.watched.has(code)?'on':'')+'" data-watch="'+esc(code)+'" aria-label="ウォッチを切り替え">'+(state.watched.has(code)?'★':'☆')+'</button></td></tr>';
 }
 function renderNotice(rows){
- const verified=rows.filter(c=>hasVerifiedDividend(c)),watched=verified.filter(c=>state.watched.has(symbolCode(c)));
+ const verified=rows.filter(c=>hasVerifiedDividend(c)||hasVerifiedBenefit(c)),watched=verified.filter(c=>state.watched.has(symbolCode(c)));
  const target=$('marketNotice');
- if(watched.length){target.className='notice visible';target.textContent='配当メモ：ウォッチ中の '+watched.map(c=>c['企業名／商品名']).join('・')+' に、公式IRで確認できた配当情報があります。詳細から資料を確認できます（新規発表通知ではありません）。';}
- else if(verified.length){target.className='notice visible';target.textContent='配当情報：'+verified.length+'銘柄に公式IRで確認できた配当資料があります。★を付けるとウォッチ銘柄として上部に表示します。';}
+ if(watched.length){target.className='notice visible';target.textContent='株主還元メモ：ウォッチ中の '+watched.map(c=>c['企業名／商品名']).join('・')+' に、公式IRで確認できた配当・優待の情報があります。詳細から資料を確認できます（新規発表通知ではありません）。';}
+ else if(verified.length){target.className='notice visible';target.textContent='株主還元情報：'+verified.length+'銘柄に公式IRで確認できた配当・優待資料があります。★を付けるとウォッチ銘柄として上部に表示します。';}
  else{target.className='notice';target.textContent='';}
 }
 function render(){
@@ -164,7 +165,7 @@ function render(){
  const all=stockSet().map(c=>({c,s:scoreCompany(c)}));const count=all.filter(x=>x.s.qualified).length;
  $('kRated').textContent=count+' / '+all.length+'社';
  const q=$('search').value.trim().toLowerCase(),rel=$('relation').value,div=$('divFilter').value,sort=$('sort').value;
- let list=all.filter(({c})=>(!q||(String(c['企業名／商品名'])+' '+symbolCode(c)+' '+String(c['投資テーマ'])).toLowerCase().includes(q))&&(rel==='all'||relation(c)===rel)&&(div==='all'||(div==='verified'&&hasVerifiedDividend(c))||(div==='watch'&&state.watched.has(symbolCode(c)))));
+ let list=all.filter(({c})=>(!q||(String(c['企業名／商品名'])+' '+symbolCode(c)+' '+String(c['投資テーマ'])).toLowerCase().includes(q))&&(rel==='all'||relation(c)===rel)&&(div==='all'||(div==='verified'&&(hasVerifiedDividend(c)||hasVerifiedBenefit(c)))||(div==='watch'&&state.watched.has(symbolCode(c)))));
  if(sort==='score')list.sort((a,b)=>(Number(b.s.qualified)-Number(a.s.qualified))||(b.s.score||0)-(a.s.score||0)||(b.s.safety??-1)-(a.s.safety??-1)||(b.s.coverage-a.s.coverage)||(parseInt(String(a.c['優先順位']).slice(1))||9)-(parseInt(String(b.c['優先順位']).slice(1))||9)||symbolCode(a.c).localeCompare(symbolCode(b.c)));
  if(sort==='name')list.sort((a,b)=>String(a.c['企業名／商品名']).localeCompare(String(b.c['企業名／商品名']),'ja'));
  if(sort==='per')list.sort((a,b)=>(numberMetric(a.c,'PER（倍）')??Infinity)-(numberMetric(b.c,'PER（倍）')??Infinity));
@@ -199,14 +200,14 @@ function showDetail(code){
  ['財務安全性（既存評価）',plain(c['財務安全性（定性）'])||'未確認'],
  ['事業の持続性','暫定定性評価（保守的な業種・分散性ルール）'],
  ['投資理由',c['投資理由']],['競争優位性',c['競争優位性']],['主なリスク',risk],['買う前に確認する論点',c['購入判断の論点']],
- ['株主優待','公式確認未済（制度の有無を確定していません）'],
+ ['株主優待',hasVerifiedBenefit(c)?(d['優待内容']||'公式IRで優待制度を確認'):'公式確認未済（制度の有無を確定していません）'],
  ['配当金',d?'公式IRで配当公表を確認。'+(d['内容']||''):'公式IRの個別確認未済。無配と断定していません。'],
  ['配当資料の対象期間',d?.['対象期']||'—']
  ];
  let html=fields.map(x=>'<div class="fact"><b>'+esc(x[0])+'</b><div>'+esc(x[1]??'未確認')+'</div></div>').join('');
  const chain=state.chains.filter(x=>x['コード']===code);
  if(chain.length){html+='<h3 style="margin:24px 0 5px">二次波及・需要の根拠</h3>'+chain.map(x=>'<div class="fact"><b>'+esc(x['バリューチェーン'])+'</b><div>'+esc(x['増える需要の起点'])+' → '+esc(x['買われる製品・役務'])+'<br><small class="muted">'+esc(x['利益化の限界']||'')+'</small></div></div>').join('');}
- const links=[['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['株価・評価資料URL']],['配当の公式IR',d?.['IR出典']]];
+ const links=[['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['株価・評価資料URL']],['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
  html+='<div class="linkrow">'+links.filter(x=>infoUrl(x[1])).map(x=>'<a href="'+esc(infoUrl(x[1]))+'" target="_blank" rel="noopener noreferrer">'+esc(x[0])+' ↗</a>').join('')+'</div>';
  $('detailBody').innerHTML=html;
  $('detailBackdrop').hidden=false;
