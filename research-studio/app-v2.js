@@ -50,6 +50,9 @@ async function loadData(){
   state.companies=parseCSV(a);state.models=parseCSV(b);state.chains=parseCSV(c);state.actions=Object.fromEntries(parseCSV(d).map(x=>[x['コード'],x]));
   try{const q=JSON.parse(e);state.quotes=q.quotes&&typeof q.quotes==='object'?q.quotes:{};}catch(_){}
   try{const z=JSON.parse(g);state.fundamentals=z.companies&&typeof z.companies==='object'?z.companies:{};}catch(_){}
+  try{const cache=JSON.parse(localStorage.getItem('irs2_jp_financial_cache')||'{}');
+    if(cache.data&&typeof cache.data==='object')Object.assign(state.fundamentals,cache.data);
+  }catch(_){}
   if(state.companies.length<30)throw Error('企業データが不足');
   state.loaded=true;
   $('dataStatus').textContent=state.companies.length+'商品を登録 / 指標は時点値';
@@ -431,7 +434,10 @@ function closeDetail(){$('detailBackdrop').hidden=true;$('technicalWidget').inne
 // Japanese issuer annual filings via public EDINET/XBRL-derived API.
 // All fetched data stays in this visitor's browser; provider attribution and fiscal dates are shown.
 async function loadJapanFundamentals(){
- const japan=state.companies.filter(c=>c['所在国']==='日本'&&/^\d{4}$/.test(symbolCode(c))&&isStock(c));
+ let cached={};try{cached=JSON.parse(localStorage.getItem('irs2_jp_financial_cache')||'{}')}catch(_){}
+ const recent=Date.now()-Number(cached.savedAt)<24*3600*1000;
+ const japan=state.companies.filter(c=>c['所在国']==='日本'&&/^\d{4}$/.test(symbolCode(c))&&isStock(c))
+   .filter(c=>!recent||!state.fundamentals[symbolCode(c)]?.provider||state.fundamentals[symbolCode(c)].provider!=='the-shashi.com');
  let completed=0,success=0;
  for(let n=0;n<japan.length;n+=6){
   const batch=japan.slice(n,n+6);
@@ -472,9 +478,13 @@ async function loadJapanFundamentals(){
    }catch(e){/* No assumptions if not found, blocked by CORS, or schema changed. */}
    finally{completed++;}
   }));
+  if(success){
+    const data={};for(const [key,val] of Object.entries(state.fundamentals))if(val?.provider==='the-shashi.com')data[key]=val;
+    try{localStorage.setItem('irs2_jp_financial_cache',JSON.stringify({savedAt:Date.now(),data}));}catch(_){}
+  }
   if(state.loaded){$('dataStatus').textContent='調査企業 '+state.companies.length+'件 / 国内決算補完 '+success+'/'+completed+'社';render();}
  }
- if(!success&&japan.length)$('dataStatus').textContent='企業情報登録済 / 外部の国内財務APIに接続できませんでした';
+ if(!success&&japan.length)$('dataStatus').textContent='企業情報登録済 / 未収録の国内決算データは取得できませんでした';
 }
 
 async function loadFx(){
