@@ -271,7 +271,7 @@ function rowHtml(c,index){
  '<td><button class="companybtn" data-detail="'+esc(code)+'">'+esc(c['企業名／商品名'])+'</button>'+(c['共通度']==='★★★'?'<span class="stars"> ★★★</span>':'')+'<div class="code">'+esc(code)+' / '+esc(theme(c))+'</div></td>'+
  '<td><span class="badge '+relationClass+'">'+esc(relationName(c))+'</span></td><td>'+scoreLabel+'</td>'+
  '<td>'+metricCell(c,'PER（倍）')+'</td><td>'+metricCell(c,'PBR（倍）')+'</td><td>'+metricCell(c,'P/S（倍）')+'</td><td>'+metricCell(c,'P/FCF（倍）')+'</td>'+
- '<td class="price">'+reference+'</td><td class="price">'+cell(e?.first)+'</td><td class="price">'+cell(e?.second)+'</td>'+
+ '<td class="price">'+reference+'</td><td class="price">'+cell(e?.first)+(e?'<small>'+esc(e.method.startsWith('日足')?'チャート分析':'割合ベース暫定')+'</small>':'')+'</td><td class="price">'+cell(e?.second)+'</td>'+
  '<td class="price">'+cell(e?.sellFirst)+'</td><td class="price">'+cell(e?.sellTarget)+'</td><td>'+dividendLabel+'</td>'+
  '<td><button class="watchbtn '+(state.watched.has(code)?'on':'')+'" data-watch="'+esc(code)+'" aria-label="ウォッチを切り替え">'+(state.watched.has(code)?'★':'☆')+'</button></td></tr>';
 }
