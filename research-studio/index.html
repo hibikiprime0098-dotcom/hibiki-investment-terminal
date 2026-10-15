@@ -23,10 +23,21 @@
 <details id="modelDetails"><summary>企業別の目標額と購入株数を見る（既存Excelの配分モデル）</summary><div class="hint detailhint">この配分は既存Excelのモデルです。下の財務ランキングとは独立しており、順位が上がったから購入額が増えるわけではありません。</div><div id="modelRows" class="modelrows"></div></details>
 </div>
 <div id="marketNotice" class="notice" role="status" aria-live="polite"></div>
+<details class="panel" id="privateMarketPanel" style="margin:15px 0;padding:14px 18px">
+ <summary><b>全78社の株価・財務を自動更新する（初回接続のみ）</b></summary>
+ <p class="hint">個人契約のEODHDから、専用の認証付きバックエンドを通じて取引日ごとの日足を取得します。APIキー自体はこのサイトに入力しません。データは本人のブラウザにだけ保存し、公開GitHubに掲載しません。</p>
+ <div class="filters" style="padding:0;border:0;box-shadow:none">
+  <label><span class="label">専用バックエンドURL</span><input id="privateApiUrl" type="url" placeholder="https://xxxxx.vercel.app" autocomplete="url" style="min-width:265px"></label>
+  <label><span class="label">専用アクセスキー</span><input id="privateAccess" type="password" placeholder="Vercelに設定した20文字以上の鍵" autocomplete="off" style="min-width:220px"></label>
+  <button id="privateConnect" type="button" class="ghost">接続・自動更新を開始</button><button id="privateDisconnect" type="button" class="ghost">接続解除</button>
+ </div>
+ <p id="privateSyncStatus" class="hint" role="status">未接続。接続後は次回以降サイトを開くと自動同期します。</p>
+ <p class="hint">国内47・海外31社の終値・過去チャートを毎回確認し、PER・PBR・PSR・財務比率を更新します。日本株は円建てです。リアルタイムではなく日次終値です。<a href="https://github.com/hibikiprime0098-dotcom/hibiki-investment-terminal/blob/main/research-private-api/README.md" target="_blank" rel="noopener">初回設定手順 ↗</a></p>
+</details>
 <details class="panel" id="providerSettings" style="margin:15px 0;padding:13px 17px">
 <summary>自動更新の範囲・データ提供元</summary>
 <p class="hint">サイトを開くと企業CSVと為替データを最新の配信ファイルから読み込み、TradingViewの市場株価ウィジェットも自動表示します。日本企業の年次決算指標はThe社史が公開するEDINET XBRL由来APIから再取得を試みます。</p>
-<p class="hint">一方、全銘柄のリアルタイム株価を表の計算基準として数値取得する機能は、現在の無料・公開サイトには未接続です。取引所・配信元との契約が必要です。表の5価格は表示されている基準株価・基準日からの参考シナリオであり、データが取得できなかった場合は未算定と明示します。</p>
+<p class="hint">一方、全銘柄の価格履歴は、上の認証付きEODHD接続の設定後に個人利用として取得可能です。取引所・配信元との契約が必要です。表の5価格は表示されている基準株価・基準日からの参考シナリオであり、データが取得できなかった場合は未算定と明示します。</p>
 </details>
 <div class="notice visible" style="display:block;background:#f4f8fc;border-color:#d8e8f5;color:#476378">
 <b>更新株価の確認：</b>下の株価一覧は、サイトを開くと自動的に読み込まれるTradingView提供の市場データです。株価表示には遅延がある場合があります。自動計算の基準価格・最終更新日とは分けて確認してください。
