@@ -26,12 +26,33 @@ function latestBalances(f){
  if(!m||typeof m!=='object')return null;
  const key=Object.keys(m).sort().reverse()[0];return m[key]||null;
 }
+function latestAnnual(financials,section){
+ const block=financials?.[section]?.yearly;
+ if(!block||typeof block!=='object')return null;
+ const entries=Object.entries(block).filter(([k,v])=>/^\d{4}-\d{2}-\d{2}$/.test(k)&&v);
+ entries.sort(([a],[b])=>b.localeCompare(a));
+ return entries.length?{date:entries[0][0],row:entries[0][1],currency:String(financials[section].currency_symbol||'')}:null;
+}
+function annualCashFacts(doc,currency,highlights){
+ const cf=latestAnnual(doc.Financials,'Cash_Flow'),income=latestAnnual(doc.Financials,'Income_Statement');
+ if(!cf||!income||cf.date!==income.date||cf.currency!==income.currency)return {};
+ const o=positive(cf.row.totalCashFromOperatingActivities??cf.row.operatingCashFlow);
+ const expenditure=num(cf.row.capitalExpenditures);
+ const direct=num(cf.row.freeCashFlow),revenue=positive(income.row.totalRevenue);
+ const fcf=direct!==null?direct:(o!==null&&expenditure!==null?o-Math.abs(expenditure):null);
+ const out={cashPeriod:cf.date,financialCurrency:cf.currency};
+ if(fcf!==null){out.fcf=fcf;if(revenue)out.fcfMargin=fcf/revenue;}
+ if(fcf>0&&cf.currency===currency&&positive(highlights.MarketCapitalization)>0)
+   out.pfcf=positive(highlights.MarketCapitalization)/fcf;
+ return out;
+}
 function fundamentals(doc,ticker,currency){
  const h=doc.Highlights||{},v=doc.Valuation||{},b=latestBalances(doc);
  const equity=positive(b?.totalStockholderEquity??b?.totalStockholdersEquity);
  const totalAssets=positive(b?.totalAssets);
  const cash=positive(b?.cashAndShortTermInvestments);
  const debt=num(b?.shortLongTermDebtTotal??b?.longTermDebtTotal);
+ const cashData=annualCashFacts(doc,currency,h);
  const fields={
   per:positive(v.TrailingPE??h.PERatio),
   pbr:positive(v.PriceBookMRQ),
@@ -40,7 +61,10 @@ function fundamentals(doc,ticker,currency){
   revenueGrowthYoY:num(h.QuarterlyRevenueGrowthYOY),
   earningsGrowthYoY:num(h.QuarterlyEarningsGrowthYOY),
   dividendYield:num(h.DividendYield),
-  fcfMargin:null,
+  fcfMargin:cashData.fcfMargin??null,
+  pfcf:cashData.pfcf??null,
+  fcfFiscalYearEnd:cashData.cashPeriod||null,
+  financialCurrency:cashData.financialCurrency||null,
   equityRatio:equity&&totalAssets?equity/totalAssets:null,
   netCash:cash!==null&&debt!==null?cash-debt:null,
   revenueTTM:positive(h.RevenueTTM),
