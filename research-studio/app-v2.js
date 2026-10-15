@@ -15,7 +15,7 @@ try{state.localQuotes=JSON.parse(localStorage.getItem('irs2_reference_quotes')||
 try{state.histories=JSON.parse(localStorage.getItem('irs2_daily_bars')||'{}')}catch(_){}
 try{state.privateQuotes=JSON.parse(localStorage.getItem('irs2_personal_eod_quotes')||'{}')}catch(_){}
 try{state.privateFundamentals=JSON.parse(localStorage.getItem('irs2_personal_financial_data')||'{}')}catch(_){}
-for(const [code,row] of Object.entries(state.privateFundamentals))if(row?.valuation){const v=row.valuation;state.fundamentals[code]={provider:'EODHD private',source:row.source,period_end:row.as_of||'',equityRatio:numMetricInitial(v.equityRatio),roe:numMetricInitial(v.roe),revenueGrowthYoY:numMetricInitial(v.revenueGrowthYoY)};}
+for(const [code,row] of Object.entries(state.privateFundamentals))if(row?.valuation){const v=row.valuation;state.fundamentals[code]={provider:'EODHD private',source:row.source,period_end:v.fcfFiscalYearEnd||row.as_of||'',fcfMargin:numMetricInitial(v.fcfMargin),equityRatio:numMetricInitial(v.equityRatio),roe:numMetricInitial(v.roe),revenueGrowthYoY:numMetricInitial(v.revenueGrowthYoY)};}
 function numMetricInitial(x){const n=Number(x);return x===null||x===undefined||String(x).trim()===''||!Number.isFinite(n)?null:n;}
 const yenfmt=new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0});
 const nfmt=new Intl.NumberFormat('ja-JP',{maximumFractionDigits:2});
@@ -81,7 +81,7 @@ function price(c){
  const user=state.localQuotes[code];if(user&&Number(user.price)>0){number=Number(user.price);date=String(user.as_of||'入力日未確認');curr=user.currency||curr;origin='ユーザー入力の参考値';}
  const personal=state.privateQuotes[code];
  if(personal&&Number(personal.price)>0&&/^[\d]{4}-\d{2}-\d{2}$/.test(String(personal.as_of||''))&&
-  (String(personal.as_of)>=String(date||'')||origin!=='ユーザー入力の参考値')){
+  (String(personal.as_of)>=String(date||'')||!/^\d{4}-\d{2}-\d{2}$/.test(String(date||'')))){
    number=Number(personal.price);date=personal.as_of;curr=personal.currency||curr;origin='個人契約EODHDの日次終値';
  }
  const fx=state.fx[curr];return {value:number,currency:curr,fx,JPY:number!==null&&fx>0?number*fx:null,date,origin,verified:origin==='配信終値'};
@@ -396,7 +396,7 @@ function showDetail(code){
  ['株価参考値',priceDisplay(c)+'　（'+marketValue(c)+' / '+p.date+' / '+p.origin+'）'],
  ['参考購入株数（仮に予算の5%）',shareEstimate(c,Math.round(state.capital*.05))+'：特定銘柄へ予算の5%を割り当てた場合'],
  ['PER',metricText(c,'PER（倍）')],['PBR',metricText(c,'PBR（倍）')],['PSR',metricText(c,'P/S（倍）')],['P/FCF',metricText(c,'P/FCF（倍）')],
- ['自己資本比率',secMetric(c,'equityRatio','%')],['FCFマージン',secMetric(c,'fcfMargin','%')],['SECの年次売上成長率',secMetric(c,'revenueGrowthYoY','%')],
+ ['自己資本比率',secMetric(c,'equityRatio','%')],['FCFマージン',secMetric(c,'fcfMargin','%')],['FCF財務報告年度',state.privateFundamentals[code]?.valuation?.fcfFiscalYearEnd||'未確認'],['SECの年次売上成長率',secMetric(c,'revenueGrowthYoY','%')],
  ['ROE',secMetric(c,'roe','%')],
  ['利用できる最新の財務表示','下部のTradingView財務ウィジェットに、売上高・利益・財務比率の提供元データを表示します。埋め込みの数値は当サイトのランキング点数に自動転記されません。'],
  ['日本の有価証券報告書由来データ',state.fundamentals[code]?.provider==='the-shashi.com'?'The社史 / EDINET XBRL / 決算期 '+(state.fundamentals[code].period_end||'不明')+' / '+(state.fundamentals[code].accounting_standard||'')+'。機械抽出のため原典照合が必要':'未取得・日本以外または対象企業データなし'],
@@ -491,7 +491,7 @@ async function loadJapanFundamentals(){
        f.historicPsr=sh.market_cap_yen/(pl.sales*1000000);
     }
     if(Object.keys(f).some(k=>['equityRatio','roe','operatingCashMargin','revenueGrowthYoY','historicPer','historicPbr','historicPsr'].includes(k))){
-      state.fundamentals[code]=f;success++;
+      state.fundamentals[code]=f;if(state.privateFundamentals[code])hydratePrivateFundamental(code,state.privateFundamentals[code]);success++;
     }
    }catch(e){/* No assumptions if not found, blocked by CORS, or schema changed. */}
    finally{completed++;}
@@ -542,7 +542,7 @@ function hydratePrivateFundamental(code,row){
  if(!row||!row.valuation)return;
  state.privateFundamentals[code]=row;
  const val=row.valuation,old=state.fundamentals[code]||{};
- state.fundamentals[code]={...old,provider:'EODHD private',source:row.source,period_end:row.as_of||'',
+ state.fundamentals[code]={...old,provider:'EODHD private',source:row.source,period_end:val.fcfFiscalYearEnd||row.as_of||'',fcfMargin:numMetric(val.fcfMargin),
    equityRatio:numMetric(val.equityRatio),roe:numMetric(val.roe),revenueGrowthYoY:numMetric(val.revenueGrowthYoY),
    dividendYield:numMetric(val.dividendYield)};
 }
