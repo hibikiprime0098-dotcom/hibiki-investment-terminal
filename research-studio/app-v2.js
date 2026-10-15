@@ -53,7 +53,7 @@ async function loadData(){
   state.loaded=true;
   $('dataStatus').textContent=state.companies.length+'商品を登録 / 指標は時点値';
   render();
- }catch(err){$('dataStatus').textContent='データ読込エラー';$('rows').innerHTML='<tr><td colspan="14">企業データを読み込めませんでした。ページを再読み込みしてください。<br>'+esc(err.message)+'</td></tr>';}
+ }catch(err){$('dataStatus').textContent='データ読込エラー';$('rows').innerHTML='<tr><td colspan="15">企業データを読み込めませんでした。ページを再読み込みしてください。<br>'+esc(err.message)+'</td></tr>';}
 }
 function symbolCode(c){return String(c['証券コード']||'').trim();}
 function isCore(c){return symbolCode(c)==='全世界株式'||String(c['取引所']).includes('投資信託')||String(c['投資テーマ']).includes('テーマETF');}
@@ -70,7 +70,7 @@ function price(c){
  const user=state.localQuotes[code];if(user&&Number(user.price)>0){number=Number(user.price);date=String(user.as_of||'入力日未確認');curr=user.currency||curr;origin='ユーザー入力の参考値';}
  const fx=state.fx[curr];return {value:number,currency:curr,fx,JPY:number!==null&&fx>0?number*fx:null,date,origin,verified:origin==='配信終値'};
 }
-function priceDisplay(c){const p=price(c);return p.JPY===null?'円換算待ち':yen(p.JPY);}
+function priceDisplay(c){const p=price(c);return p.JPY===null?(c['所在国']==='日本'?'円建て株価未取得':'株価・円換算未取得'):yen(p.JPY);}
 function marketValue(c){const p=price(c);return p.value===null?'株価未確認':p.currency+' '+nfmt.format(p.value);}
 function numberMetric(c,name){
  const direct=nval(c[name]);if(direct!==null&&direct>0)return direct;
@@ -208,12 +208,12 @@ function rowHtml(c,index){
  const rank=sc.qualified?index+'位':index+'位・調査';
  const scoreLabel=sc.qualified?'<strong class="score">暫定 '+sc.score+'点</strong><small class="muted"> / 充足 '+sc.coverage+'%</small>':'<span class="muted">評価保留 / 充足 '+sc.coverage+'%</span>';
  const dividendLabel=hasVerifiedDividend(c)?'<span class="badge gold">配当IR確認</span>':hasVerifiedBenefit(c)?'<span class="badge green">優待IR確認</span>':'<span class="muted">未確認</span>';
- const cell=n=>e?'<strong>'+yen(n)+'</strong>'+(e.stale?'<small>基準日古い</small>':''):'<span class="muted">基準株価未取得</span>';
- const reference=p.JPY>0?'<strong>'+yen(p.JPY)+'</strong><small>'+esc(p.date)+' / '+esc(p.origin)+(e?.stale?' / 古い':'')+'</small>':'<a href="'+esc(infoUrl(c['株価・評価資料URL'])||'https://www.tradingview.com/')+'" target="_blank" rel="noopener noreferrer">提供元で確認 ↗</a><small>CSV株価は未取得</small>';
+ const cell=n=>e?'<strong>'+yen(n)+'</strong>'+(e.stale?'<small>基準日古い</small>':''):'<span class="muted">基準値確認後に計算</span>'; 
+ const reference=p.JPY>0?'<strong>'+yen(p.JPY)+'</strong><small>'+esc(p.date)+' / '+esc(p.origin)+(e?.stale?' / 古い':'')+'</small>':'<a href="'+esc(infoUrl(c['株価・評価資料URL'])||'https://www.tradingview.com/')+'" target="_blank" rel="noopener noreferrer">提供元で確認 ↗</a><small>基準株価未取得（'+(c['所在国']==='日本'?'JPY':'現地通貨')+'）</small>';
  return '<tr><td><span class="badge">'+esc(rank)+'</span></td>'+
  '<td><button class="companybtn" data-detail="'+esc(code)+'">'+esc(c['企業名／商品名'])+'</button>'+(c['共通度']==='★★★'?'<span class="stars"> ★★★</span>':'')+'<div class="code">'+esc(code)+' / '+esc(theme(c))+'</div></td>'+
  '<td><span class="badge '+relationClass+'">'+esc(relationName(c))+'</span></td><td>'+scoreLabel+'</td>'+
- '<td>'+ratio(c['PER（倍）'])+'</td><td>'+ratio(c['P/S（倍）'])+'</td><td>'+ratio(c['P/FCF（倍）'])+'</td>'+
+ '<td>'+metricCell(c,'PER（倍）')+'</td><td>'+metricCell(c,'PBR（倍）')+'</td><td>'+metricCell(c,'P/S（倍）')+'</td><td>'+metricCell(c,'P/FCF（倍）')+'</td>'+
  '<td class="price">'+reference+'</td><td class="price">'+cell(e?.first)+'</td><td class="price">'+cell(e?.second)+'</td>'+
  '<td class="price">'+cell(e?.sellFirst)+'</td><td class="price">'+cell(e?.sellTarget)+'</td><td>'+dividendLabel+'</td>'+
  '<td><button class="watchbtn '+(state.watched.has(code)?'on':'')+'" data-watch="'+esc(code)+'" aria-label="ウォッチを切り替え">'+(state.watched.has(code)?'★':'☆')+'</button></td></tr>';
@@ -244,10 +244,10 @@ function render(){
  if(sort==='name')list.sort((a,b)=>String(a.c['企業名／商品名']).localeCompare(String(b.c['企業名／商品名']),'ja'));
  if(sort==='per')list.sort((a,b)=>(numberMetric(a.c,'PER（倍）')??Infinity)-(numberMetric(b.c,'PER（倍）')??Infinity));
  let rank=0;
- $('rows').innerHTML=list.map(({c,s})=>rowHtml(c,++rank)).join('')||'<tr><td colspan="14">条件に合う銘柄がありません。</td></tr>';
+ $('rows').innerHTML=list.map(({c,s})=>rowHtml(c,++rank)).join('')||'<tr><td colspan="15">条件に合う銘柄がありません。</td></tr>';
  $('resultCount').textContent=list.length+'社を表示 / '+all.length+'社';
  renderNotice(stockSet());
- if($('quotesOpen').parentElement.open)reloadMarketWidget();
+ if($('quotesOpen').parentElement.open&&state.widgetMarket!==state.market){state.widgetMarket=state.market;reloadMarketWidget();}
 }
 function tradingSymbol(c){
  const code=symbolCode(c).replace(/[^A-Za-z0-9.]/g,'');const ex=String(c['取引所']||'').toUpperCase();
@@ -299,7 +299,7 @@ function showDetail(code){
  ['関係の種類',relationName(c)+' / '+c['投資テーマ']],
  ['株価参考値',priceDisplay(c)+'　（'+marketValue(c)+' / '+p.date+' / '+p.origin+'）'],
  ['参考購入株数（仮に予算の5%）',shareEstimate(c,Math.round(state.capital*.05))+'：特定銘柄へ予算の5%を割り当てた場合'],
- ['PER',ratio(numberMetric(c,'PER（倍）'))],['PBR',ratio(numberMetric(c,'PBR（倍）'))],['PSR',ratio(numberMetric(c,'P/S（倍）'))],['P/FCF',ratio(numberMetric(c,'P/FCF（倍）'))],
+ ['PER',metricText(c,'PER（倍）')],['PBR',metricText(c,'PBR（倍）')],['PSR',metricText(c,'P/S（倍）')],['P/FCF',metricText(c,'P/FCF（倍）')],
  ['自己資本比率',secMetric(c,'equityRatio','%')],['FCFマージン',secMetric(c,'fcfMargin','%')],['SECの年次売上成長率',secMetric(c,'revenueGrowthYoY','%')],
  ['ROE',secMetric(c,'roe','%')],
  ['利用できる最新の財務表示','下部のTradingView財務ウィジェットに、売上高・利益・財務比率の提供元データを表示します。埋め込みの数値は当サイトのランキング点数に自動転記されません。'],
@@ -363,7 +363,7 @@ function init(){
  $('usdjpy').addEventListener('change',e=>{const v=Number(e.target.value);if(!(v>0))return;state.fx.USD=v;state.fxNote='USD/JPY手入力（最新値ではありません）';$('fxStatus').textContent=state.fxNote;localStorage.setItem('irs_usdjpy',String(v));if(state.loaded)render();});
  $('jpLots').addEventListener('change',e=>{state.lot=Number(e.target.value);localStorage.setItem('irs_lot_mode',String(state.lot));if(state.loaded)render();});
  ['search','theme','relation','divFilter','sort'].forEach(k=>$(k).addEventListener(k==='search'?'input':'change',()=>{if(state.loaded)render();}));
- $('quotesOpen').parentElement.addEventListener('toggle',e=>{if(e.target.open)reloadMarketWidget();});
+ $('quotesOpen').parentElement.addEventListener('toggle',e=>{if(e.target.open){state.widgetMarket=state.market;reloadMarketWidget();}});
  $('weightsToggle').onclick=()=>{const pane=$('weightsPanel');pane.hidden=!pane.hidden;$('weightsToggle').setAttribute('aria-expanded',pane.hidden?'false':'true');};
  $('rows').onclick=e=>{const target=e.target.closest('[data-detail]');if(target){showDetail(target.dataset.detail);return;}const watch=e.target.closest('[data-watch]');if(watch){const code=watch.dataset.watch;if(state.watched.has(code))state.watched.delete(code);else state.watched.add(code);localStorage.setItem('irs2_watch',JSON.stringify([...state.watched]));render();toast('ウォッチ銘柄を更新しました');}};
  $('detailBody').addEventListener('click',e=>{if(e.target.id!=='saveQuote')return;
