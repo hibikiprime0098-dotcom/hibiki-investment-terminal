@@ -53,6 +53,7 @@ async function loadData(){
   state.loaded=true;
   $('dataStatus').textContent=state.companies.length+'商品を登録 / 指標は時点値';
   render();
+  loadJapanFundamentals();
  }catch(err){$('dataStatus').textContent='データ読込エラー';$('rows').innerHTML='<tr><td colspan="15">企業データを読み込めませんでした。ページを再読み込みしてください。<br>'+esc(err.message)+'</td></tr>';}
 }
 function symbolCode(c){return String(c['証券コード']||'').trim();}
@@ -74,7 +75,11 @@ function priceDisplay(c){const p=price(c);return p.JPY===null?(c['所在国']===
 function marketValue(c){const p=price(c);return p.value===null?'株価未確認':p.currency+' '+nfmt.format(p.value);}
 function numberMetric(c,name){
  const direct=nval(c[name]);if(direct!==null&&direct>0)return direct;
- const f=state.fundamentals[symbolCode(c)];if(!f||c['所在国']!=='米国')return null;
+ const f=state.fundamentals[symbolCode(c)];if(f&&c['所在国']==='日本'&&f.provider==='the-shashi.com'){
+  const tag={'PER（倍）':'historicPer','PBR（倍）':'historicPbr','P/S（倍）':'historicPsr'}[name];
+  return tag&&Number(f[tag])>0?Number(f[tag]):null;
+ }
+ if(!f||c['所在国']!=='米国')return null;
  const p=price(c);
  // Ratios from SEC disclosures plus quoted market price. Never use a stale reference to claim a current ratio.
  if(!(p.value>0)||p.currency!=='USD')return null;
@@ -88,6 +93,24 @@ function numberMetric(c,name){
  if(name==='P/FCF（倍）'&&fcf>0)return p.value*shares/fcf;
  if(name==='P/S（倍）'&&revenue>0)return p.value*shares/revenue;
  return null;
+}
+function metricOrigin(c,key){
+ const direct=nval(c[key]);if(direct!==null&&direct>0)return 'existing';
+ const f=state.fundamentals[symbolCode(c)];
+ if(f?.provider==='the-shashi.com'&&({
+  'PER（倍）':'historicPer','PBR（倍）':'historicPbr','P/S（倍）':'historicPsr'
+ }[key])&&Number(f[{'PER（倍）':'historicPer','PBR（倍）':'historicPbr','P/S（倍）':'historicPsr'}[key]])>0)return 'annual';
+ return null;
+}
+function metricText(c,key){
+ const val=numberMetric(c,key);if(!(val>0))return '公表資料で確認（対象指標の算出値なし）';
+ const past=metricOrigin(c,key)==='annual';
+ const f=state.fundamentals[symbolCode(c)]||{};
+ return nfmt.format(val)+'倍'+(past?'（決算期末 '+(f.period_end||'期不明')+'、現在倍率ではない）':'');
+}
+function metricCell(c,key){
+ const val=numberMetric(c,key);if(!(val>0))return '<span class="muted">—<small style="display:block">算定元不足</small></span>';
+ return nfmt.format(val)+'倍'+(metricOrigin(c,key)==='annual'?'<small class="muted" style="display:block">決算期末</small>':'');
 }
 function valuation(c){
  const pf=numberMetric(c,'P/FCF（倍）');const pe=numberMetric(c,'PER（倍）');const ps=numberMetric(c,'P/S（倍）');
@@ -123,7 +146,8 @@ function scoreCompany(c){
  const safety=rating(c),v=valuation(c),pf=numberMetric(c,'P/FCF（倍）');
  const hasFcf=String(c['財務安全性（定性）']||'').includes('FCF');
  const sec=state.fundamentals[symbolCode(c)],margin=Number(sec?.fcfMargin);
- const cash=sec&&Number.isFinite(margin)?Math.max(5,Math.min(98,50+margin*190)):(pf!==null?Math.max(22,Math.min(90,95-.6*pf)):(hasFcf?64:null));
+ const opMargin=Number(sec?.operatingCashMargin);
+ const cash=sec&&Number.isFinite(margin)?Math.max(5,Math.min(98,50+margin*190)):(sec&&Number.isFinite(opMargin)?Math.max(5,Math.min(92,45+opMargin*155)):(pf!==null?Math.max(22,Math.min(90,95-.6*pf)):(hasFcf?64:null)));
  const raw=plain(c['売上成長率予想'])||plain(c['売上成長率実績'])||(state.fundamentals[symbolCode(c)]?.revenueGrowthYoY!=null?String(state.fundamentals[symbolCode(c)].revenueGrowthYoY):null);
  const gr=raw!==null&&Math.abs(Number(raw))<=2?Number(raw):null;
  const growth=gr===null?null:Math.max(8,Math.min(95,50+gr*145));
@@ -165,7 +189,12 @@ function scoreBreakdown(c,sc){
   const value=sc.parts[k];let reason='';
   if(k==='safety')reason='既存財務評価：'+(plain(c['財務安全性（定性）'])||'未確認')+'。A/B/C/D→91/74/43/19点に暫定換算。定量的な自己資本比率・負債の直接計算ではありません。';
   if(k==='v')reason=sc.valuation.label+'。P/FCF→PER→PSRの順に利用できる倍率を参照。低倍率だけでは適正価格を保証しません。';
-  if(k==='cash')reason=state.fundamentals[symbolCode(c)]?.fcfMargin!=null?'SEC報告のFCFマージン '+pct(state.fundamentals[symbolCode(c)].fcfMargin)+'（営業CF−設備投資を年次売上で割った参考値）': 'P/FCFまたは既存FCFコメントの代理指標。実際のFCF額・マージンは未収録の可能性あり。';
+  if(k==='cash'){
+  const f=state.fundamentals[symbolCode(c)];
+  reason=f?.fcfMargin!=null?'SEC報告のFCFマージン '+pct(f.fcfMargin):
+  f?.operatingCashMargin!=null?'決算期末の営業CFマージン '+pct(f.operatingCashMargin)+'。FCFではなく、キャッシュ創出の代理指標':
+  'P/FCFまたは既存FCFコメントの代理指標。実際のFCF額・マージンは未収録の場合あり。';
+ }
   if(k==='growth')reason=(plain(c['売上成長率予想'])?'予想 '+pct(c['売上成長率予想'])+' / '+(c['予想対象期間']||'期間未記載'):'実績 '+pct(c['売上成長率実績'])+' / '+(c['実績対象期間']||'期間未記載'))+'。数字は財務資料の元データであり将来リターン確率ではありません。';
   if(k==='durability')reason='事業分散・専業度と主力事業の有無に基づく暫定定性換算。競合シェア・チャーンの検証は必要。';
   return {name,weight,value,earned:value===null?null:(value*weight/100),reason};
@@ -303,6 +332,7 @@ function showDetail(code){
  ['自己資本比率',secMetric(c,'equityRatio','%')],['FCFマージン',secMetric(c,'fcfMargin','%')],['SECの年次売上成長率',secMetric(c,'revenueGrowthYoY','%')],
  ['ROE',secMetric(c,'roe','%')],
  ['利用できる最新の財務表示','下部のTradingView財務ウィジェットに、売上高・利益・財務比率の提供元データを表示します。埋め込みの数値は当サイトのランキング点数に自動転記されません。'],
+ ['日本の有価証券報告書由来データ',state.fundamentals[code]?.provider==='the-shashi.com'?'The社史 / EDINET XBRL / 決算期 '+(state.fundamentals[code].period_end||'不明')+' / '+(state.fundamentals[code].accounting_standard||'')+'。機械抽出のため原典照合が必要':'未取得・日本以外または対象企業データなし'],
  ['SECの直近財務報告',state.fundamentals[code]?('米国SEC開示 '+(state.fundamentals[code].period_end||'期間未確認')+' / '+(state.fundamentals[code].source||'')):'未連携・国内は企業IRから照合'],
  ['売上成長率・実績',pct(c['売上成長率実績'])+' / '+(c['実績対象期間']||'')],
  ['売上成長率・予想',pct(c['売上成長率予想'])+' / '+(c['予想対象期間']||'')+'。会社予想か市場予想かは一次資料で要確認'],['予想値の調査根拠',c['業績・技術一次資料URL']||'資料未登録'],['評価指標の参照日',c['指標評価日']||'資料ごとの照合が必要'],
@@ -319,7 +349,7 @@ function showDetail(code){
  html+='<h3 style="margin:25px 0 12px">各指標のスコア算定根拠</h3>'+parts.map(p=>'<div class="fact"><b>'+esc(p.name)+' '+p.weight+'点枠</b><div>'+esc(p.value===null?'未収録':p.value.toFixed(1)+'/100')+' → '+esc(p.earned===null?'判定除外':p.earned.toFixed(1)+'点')+'<br><span class="muted">'+esc(p.reason)+'</span></div></div>').join('');
  const chain=state.chains.filter(x=>x['コード']===code);
  if(chain.length){html+='<h3 style="margin:24px 0 5px">二次波及・需要の根拠</h3>'+chain.map(x=>'<div class="fact"><b>'+esc(x['バリューチェーン'])+'</b><div>'+esc(x['増える需要の起点'])+' → '+esc(x['買われる製品・役務'])+'<br><small class="muted">'+esc(x['利益化の限界']||'')+'</small></div></div>').join('');}
- const links=[['SEC XBRL元データ',state.fundamentals[code]?.source],['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['指標出典URL']||c['株価・評価資料URL']],['テーマの調査資料',c['業績・技術一次資料URL']],['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
+ const links=[['日本の財務資料（The社史）',state.fundamentals[code]?.provider==='the-shashi.com'?state.fundamentals[code].source:null],['SEC XBRL元データ',state.fundamentals[code]?.provider!=='the-shashi.com'?state.fundamentals[code]?.source:null],['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['指標出典URL']||c['株価・評価資料URL']],['テーマの調査資料',c['業績・技術一次資料URL']],['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
  html+='<div class="linkrow">'+links.filter(x=>infoUrl(x[1])).map(x=>'<a href="'+esc(infoUrl(x[1]))+'" target="_blank" rel="noopener noreferrer">'+esc(x[0])+' ↗</a>').join('')+'</div>';
  $('detailBody').innerHTML=html;
  $('detailBackdrop').hidden=false;
@@ -343,6 +373,53 @@ function showDetail(code){
  $('chartContainer').querySelector('.tvbox').appendChild(script);
 }
 function closeDetail(){$('detailBackdrop').hidden=true;$('chartContainer').innerHTML='';$('symbolQuote').innerHTML='';$('symbolFinancials').innerHTML='';$('priceSummary').innerHTML='';document.body.style.overflow='';}
+// Japanese issuer annual filings via public EDINET/XBRL-derived API.
+// All fetched data stays in this visitor's browser; provider attribution and fiscal dates are shown.
+async function loadJapanFundamentals(){
+ const japan=state.companies.filter(c=>c['所在国']==='日本'&&/^\d{4}$/.test(symbolCode(c))&&isStock(c));
+ let completed=0,success=0;
+ for(let n=0;n<japan.length;n+=6){
+  const batch=japan.slice(n,n+6);
+  await Promise.all(batch.map(async c=>{
+   const code=symbolCode(c);
+   try{
+    const fetchJson=async suffix=>{
+      const response=await fetch('https://the-shashi.com/api/'+code+'/'+suffix,{cache:'no-store',signal:AbortSignal.timeout(7500)});
+      if(!response.ok)throw Error('HTTP '+response.status);return response.json();
+    };
+    const [d,stock]=await Promise.all([fetchJson('financials.json'),fetchJson('financials/stock.json')]);
+    if(d.stock_code!==code||stock.stock_code!==code)throw Error('Code mismatch');
+    const last=(rows)=>Array.isArray(rows)?rows.filter(x=>x&&x.period).sort((a,b)=>String(b.period).localeCompare(String(a.period)))[0]:null;
+    const pl=last(d.financials),bs=last(d.bs),cf=last(d.cf),sh=last(stock.stock);
+    const eligible=pl&&bs&&pl.period===bs.period&&pl.consolidation===bs.consolidation;
+    const f={provider:'the-shashi.com',source:d.canonical_url,period_end:pl?.period||bs?.period||'',
+     updated:d.updated,accounting_standard:pl?.accounting_standard,consolidation:pl?.consolidation,
+     data_attribution:d.attribution};
+    if(eligible){
+     if(Number(bs.total_assets)>0&&Number(bs.equity)>0)f.equityRatio=bs.equity/bs.total_assets;
+     if(Number(bs.equity)>0&&Number.isFinite(Number(pl.net_profit)))f.roe=pl.net_profit/bs.equity;
+     if(Number(pl.sales)>0&&cf?.period===pl.period&&Number.isFinite(Number(cf.operating_cf)))
+       f.operatingCashMargin=cf.operating_cf/pl.sales;
+     const historic=Array.isArray(d.financials)?d.financials.filter(x=>x?.period&&x.period!==pl.period&&x.consolidation===pl.consolidation).sort((a,b)=>String(b.period).localeCompare(String(a.period)))[0]:null;
+     if(historic&&Number(historic.sales)>0&&Number(pl.sales)>0)f.revenueGrowthYoY=pl.sales/historic.sales-1;
+    }
+    if(sh&&sh.period===pl?.period){
+     if(Number(sh.per)>0)f.historicPer=Number(sh.per);
+     if(Number(sh.pbr)>0)f.historicPbr=Number(sh.pbr);
+     if(Number(sh.market_cap_yen)>0&&Number(pl.sales)>0&&pl.unit==='百万円')
+       f.historicPsr=sh.market_cap_yen/(pl.sales*1000000);
+    }
+    if(Object.keys(f).some(k=>['equityRatio','roe','operatingCashMargin','revenueGrowthYoY','historicPer','historicPbr','historicPsr'].includes(k))){
+      state.fundamentals[code]=f;success++;
+    }
+   }catch(e){/* No assumptions if not found, blocked by CORS, or schema changed. */}
+   finally{completed++;}
+  }));
+  if(state.loaded){$('dataStatus').textContent='調査企業 '+state.companies.length+'件 / 国内決算補完 '+success+'/'+completed+'社';render();}
+ }
+ if(!success&&japan.length)$('dataStatus').textContent='企業情報登録済 / 外部の国内財務APIに接続できませんでした';
+}
+
 async function loadFx(){
  const rates=['USD','EUR','GBP'];const found=await Promise.all(rates.map(async code=>{
  try{
