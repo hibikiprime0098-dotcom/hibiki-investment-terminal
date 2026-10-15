@@ -7,11 +7,12 @@ const state={
  lot:['1','100','200'].includes(localStorage.getItem('irs_lot_mode'))?Number(localStorage.getItem('irs_lot_mode')):1,
  fx:{JPY:1,USD:Number(localStorage.getItem('irs_usdjpy'))||150,EUR:0,GBP:0},
  fxNote:'保存されたレート／仮設定。最新値ではありません。',
- companies:[],models:[],chains:[],actions:{},quotes:{},fundamentals:{},localQuotes:{},
+ companies:[],models:[],chains:[],actions:{},quotes:{},fundamentals:{},localQuotes:{},histories:{},activeCode:null,
  watched:new Set(),chartReady:false,loaded:false
 };
 try{const raw=JSON.parse(localStorage.getItem('irs2_watch')||'[]');state.watched=new Set(Array.isArray(raw)?raw:[]);}catch(_){}
 try{state.localQuotes=JSON.parse(localStorage.getItem('irs2_reference_quotes')||'{}')}catch(_){}
+try{state.histories=JSON.parse(localStorage.getItem('irs2_daily_bars')||'{}')}catch(_){}
 const yenfmt=new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0});
 const nfmt=new Intl.NumberFormat('ja-JP',{maximumFractionDigits:2});
 function yen(n){return '¥'+yenfmt.format(Math.round(Number(n)||0));}
@@ -165,8 +166,31 @@ function theme(c){
  return /サイバー|セキュリティ|PQC/.test(t)?'サイバー':/量子/.test(t)?'量子':'AI';
 }
 function roundingTarget(num){return num>=1000?Math.floor(num/10)*10:num>=100?Math.floor(num):Math.floor(num*10)/10;}
+function technicalPlan(c,p,score){
+ if(!globalThis.IRTechnical)return null;
+ const candles=state.histories[symbolCode(c)];if(!Array.isArray(candles)||candles.length<60)return null;
+ const a=globalThis.IRTechnical.levels(candles);
+ if(!a.ok)return null;
+ const age=(Date.now()-Date.parse(a.as_of+'T00:00:00Z'))/86400000;
+ // Never silently overwrite levels with a very old dataset, or compare split-adjusted bars with a later quote.
+ if(!Number.isFinite(age)||age<0||age>21||!(p.value>0)||!p.fx)return null;
+ if(p.date&&/^\d{4}-\d{2}-\d{2}$/.test(p.date)){
+  const gap=(Date.parse(p.date+'T00:00:00Z')-Date.parse(a.as_of+'T00:00:00Z'))/86400000;
+  if(gap>7)return null;
+ }
+ if(Math.abs(a.current-p.value)/p.value>.035)return null;
+ const factor=p.fx;
+ return {ref:p.JPY,date:p.date,
+   first:roundingTarget(a.buyWatch*factor),second:roundingTarget(a.buyTarget*factor),
+   sellFirst:roundingTarget(a.sellWatch*factor),sellTarget:roundingTarget(a.sellTarget*factor),
+   shallow:Math.round(100*(1-a.buyWatch/a.current)),deep:Math.round(100*(1-a.buyTarget/a.current)),
+   sellWatch:Math.round(100*(a.sellWatch/a.current-1)),sellTargetPct:Math.round(100*(a.sellTarget/a.current-1)),
+   why:a.why,qualified:score.qualified,stale:age>7,method:'日足チャート（'+a.count+'本）',
+   technical:a,info:'実際の過去高値・安値と移動平均を基準にした支持・抵抗帯。指値の約定や反転を保証しません。'};
+}
 function entryPlan(c){
  const p=price(c),sc=scoreCompany(c);if(!(p.JPY>0))return null;
+ const fromChart=technicalPlan(c,p,sc);if(fromChart)return fromChart;
  const per=numberMetric(c,'PER（倍）'),t=theme(c),pbr=numberMetric(c,'PBR（倍）');
  let buyWatch=10,buyTarget=20,sellWatch=20,sellTarget=40,why='標準的な長期投資の価格変動シナリオ';
  if((t==='量子'&&c['需要区分']==='直接')||(['3692','5574','5591','5132','4417','4398'].includes(symbolCode(c))&&!sc.qualified)){
@@ -181,7 +205,7 @@ function entryPlan(c){
  return {ref:p.JPY,date:p.date,first:roundingTarget(p.JPY*(1-buyWatch/100)),second:roundingTarget(p.JPY*(1-buyTarget/100)),
   sellFirst:roundingTarget(p.JPY*(1+sellWatch/100)),sellTarget:roundingTarget(p.JPY*(1+sellTarget/100)),
   shallow:buyWatch,deep:buyTarget,sellWatch,sellTargetPct:sellTarget,why,qualified:sc.qualified,stale,
-  info:'参考株価を基点にした上下動シナリオ。予想EPS/DCFで導いた適正価格や確定売却推奨ではありません。'};
+  method:'割合ベース（実際の日足支持・抵抗未計算）',info:'参考株価を基点にした上下動シナリオ。予想EPS/DCFで導いた適正価格や確定売却推奨ではありません。'};
 }
 
 function scoreBreakdown(c,sc){
@@ -306,13 +330,22 @@ function reloadMarketWidget(){
  parent.appendChild(script);holder.appendChild(parent);
 }
 function showDetail(code){
- const c=state.companies.find(x=>symbolCode(x)===code);if(!c)return;
+ const c=state.companies.find(x=>symbolCode(x)===code);if(!c)return;state.activeCode=code;
  const s=scoreCompany(c),d=dividend(c),p=price(c),risk=c['主要リスク'],entry=entryPlan(c),parts=scoreBreakdown(c,s);
  $('detailSymbol').textContent=esc(code)+' / '+esc(c['所在国'])+' / '+esc(relationName(c));
  $('detailTitle').textContent=c['企業名／商品名'];
+ const chart=entry?.technical;
+ $('technicalBadge').textContent=chart?'チャート '+chart.count+'本':'テクニカル分析（データ待ち）';
+ $('technicalExplanation').textContent=chart?
+ '終値 '+nfmt.format(chart.current)+' / MA20 '+nfmt.format(chart.ma20)+' / MA60 '+nfmt.format(chart.ma60)+
+ ' / MA200 '+(chart.ma200?nfmt.format(chart.ma200):'本数不足')+' / ATR14 '+nfmt.format(chart.atr14)+
+ '。期間 '+chart.history_first+'〜'+chart.as_of+'。支持帯 '+nfmt.format(chart.support60)+'、'+nfmt.format(chart.support120)+
+ ' ／抵抗帯 '+nfmt.format(chart.resistance60)+'、'+nfmt.format(chart.resistance120)+
+ '。過去の値動きから算出したシナリオで将来の株価を保証しません。':
+ '日足データが未取得のため5価格は暫定％モデルです。最新のTradingViewテクニカル表示でトレンドを確認できます。正規の時系列CSVを読み込むと支持・抵抗帯から5価格を再計算します。';
  const levels=[['直近の取得株価',p.JPY>0?yen(p.JPY):'提供元で確認'],['買い検討開始',entry?yen(entry.first):'算定待ち'],['購入目標',entry?yen(entry.second):'算定待ち'],['売却検討開始',entry?yen(entry.sellFirst):'算定待ち'],['目標売却',entry?yen(entry.sellTarget):'算定待ち']];
  $('priceSummary').innerHTML=levels.map(([label,value],i)=>'<div class="pricepill"><span>'+esc(label)+'</span><b>'+esc(value)+'</b></div>').join('')+
- '<p class="hint" style="grid-column:1/-1;margin:3px 0">価格の基準：'+esc(p.date)+' / '+esc(p.origin)+(entry?.stale?'（参考価格は7日超前のため再確認が必要）':'')+'。売買の4段階は参考価格からの条件付きシナリオであり、適正株価を保証しません。</p>';
+ '<p class="hint" style="grid-column:1/-1;margin:3px 0">価格の基準：'+esc(p.date)+' / '+esc(p.origin)+(entry?.stale?'（参考価格は7日超前のため再確認が必要）':'')+'。算定方式：'+esc(entry?.method||'株価待ち')+'。4つの売買目安はシナリオであり、適正株価を保証しません。</p>';
  const fields=[
  ['暫定優先順位',s.qualified?s.score+'点 /100（指標充足 '+s.coverage+'%）':'判定保留（指標充足 '+s.coverage+'%）'],
  ['指標充足率の意味','データが利用できた評価項目の配点合計'+s.coverage+'点/100点。65%や80%は将来の成功確率でも株価上昇確率でもありません。'],
@@ -325,6 +358,7 @@ function showDetail(code){
  ['目標売却価格④',entry?yen(entry.sellTarget)+'（参考株価から+'+entry.sellTargetPct+'%、利益確定を検討する参考値）':'参考株価を確認するまで提示保留'],
  ['基準株価のデータ品質',entry?(entry.stale?'7日超の過去価格に基づく試算。今の株価ではないため最新値の照合が必要':'原則7日以内の基準株価。終値/遅延値とリアルタイム値は異なる'): '参考株価未取得。TradingViewの銘柄画面から確認'],
 
+ ['価格提案の算定方式',entry?.method||'基準株価待ち'],
  ['価格提案の考え方',entry?entry.why+'。'+(entry.qualified?'財務スコアは暫定計算済':'財務評価は未完了・価格だけのシナリオ')+'。'+entry.date+'の参考株価を基準にしたシナリオで、適正価値の断定や売却推奨ではありません。':'価格・業績を確認後に提案'],
 
  ['関係の種類',relationName(c)+' / '+c['投資テーマ']],
@@ -351,12 +385,20 @@ function showDetail(code){
  html+='<h3 style="margin:25px 0 12px">各指標のスコア算定根拠</h3>'+parts.map(p=>'<div class="fact"><b>'+esc(p.name)+' '+p.weight+'点枠</b><div>'+esc(p.value===null?'未収録':p.value.toFixed(1)+'/100')+' → '+esc(p.earned===null?'判定除外':p.earned.toFixed(1)+'点')+'<br><span class="muted">'+esc(p.reason)+'</span></div></div>').join('');
  const chain=state.chains.filter(x=>x['コード']===code);
  if(chain.length){html+='<h3 style="margin:24px 0 5px">二次波及・需要の根拠</h3>'+chain.map(x=>'<div class="fact"><b>'+esc(x['バリューチェーン'])+'</b><div>'+esc(x['増える需要の起点'])+' → '+esc(x['買われる製品・役務'])+'<br><small class="muted">'+esc(x['利益化の限界']||'')+'</small></div></div>').join('');}
- const links=[['日本の財務資料（The社史）',state.fundamentals[code]?.provider==='the-shashi.com'?state.fundamentals[code].source:null],['SEC XBRL元データ',state.fundamentals[code]?.provider!=='the-shashi.com'?state.fundamentals[code]?.source:null],['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['指標出典URL']||c['株価・評価資料URL']],['テーマの調査資料',c['業績・技術一次資料URL']],['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
+ const links=[['日本の財務資料（The社史）',state.fundamentals[code]?.provider==='the-shashi.com'?state.fundamentals[code].source:null],['SEC XBRL元データ',state.fundamentals[code]?.provider!=='the-shashi.com'?state.fundamentals[code]?.source:null],['企業一次資料',c['業績・技術一次資料URL']],['株価・評価資料',c['指標出典URL']||c['株価・評価資料URL']],['テーマの調査資料',c['業績・技術一次資料URL']],['楽天証券の公開情報を検索', 'https://www.google.com/search?q='+encodeURIComponent('site:rakuten-sec.co.jp '+code+' '+c['企業名／商品名']+' PER PBR')],
+ ['マネックス証券の公開情報を検索','https://www.google.com/search?q='+encodeURIComponent('site:monex.co.jp '+code+' '+c['企業名／商品名']+' 企業分析')],
+ ['SBI証券の公開情報を検索','https://www.google.com/search?q='+encodeURIComponent('site:sbisec.co.jp '+code+' '+c['企業名／商品名']+' 財務')],
+ ['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
  html+='<div class="linkrow">'+links.filter(x=>infoUrl(x[1])).map(x=>'<a href="'+esc(infoUrl(x[1]))+'" target="_blank" rel="noopener noreferrer">'+esc(x[0])+' ↗</a>').join('')+'</div>';
  $('detailBody').innerHTML=html;
  $('detailBackdrop').hidden=false;
  document.body.style.overflow='hidden';
  const sym=tradingSymbol(c),tv='https://www.tradingview.com/symbols/'+encodeURIComponent(sym.replace(':','-'))+'/';
+ const technicalWidget=$('technicalWidget');
+ technicalWidget.innerHTML='<h3 style="margin:0 0 8px">TradingViewの日足テクニカル分析（参考）</h3><div class="tradingview-widget-container" style="height:365px"><div class="tradingview-widget-container__widget"></div></div>';
+ const ts=document.createElement('script');ts.async=true;ts.src='https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js';
+ ts.textContent=JSON.stringify({interval:'1D',width:'100%',height:'100%',symbol:sym,showIntervalTabs:true,locale:'ja',colorTheme:'light',isTransparent:false});
+ technicalWidget.querySelector('.tradingview-widget-container').appendChild(ts);
  const symbox=$('symbolQuote');symbox.innerHTML='<div class="tradingview-widget-container" style="width:100%;min-height:140px"><div class="tradingview-widget-container__widget"></div></div>';
  const w=document.createElement('script');w.async=true;w.src='https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js';
  w.textContent=JSON.stringify({symbol:sym,colorTheme:'light',isTransparent:false,locale:'ja',width:'100%'});
@@ -374,7 +416,7 @@ function showDetail(code){
  script.async=true;script.textContent=JSON.stringify(cfg);
  $('chartContainer').querySelector('.tvbox').appendChild(script);
 }
-function closeDetail(){$('detailBackdrop').hidden=true;$('chartContainer').innerHTML='';$('symbolQuote').innerHTML='';$('symbolFinancials').innerHTML='';$('priceSummary').innerHTML='';document.body.style.overflow='';}
+function closeDetail(){$('detailBackdrop').hidden=true;$('technicalWidget').innerHTML='';$('chartContainer').innerHTML='';$('symbolQuote').innerHTML='';$('symbolFinancials').innerHTML='';$('priceSummary').innerHTML='';document.body.style.overflow='';}
 // Japanese issuer annual filings via public EDINET/XBRL-derived API.
 // All fetched data stays in this visitor's browser; provider attribution and fiscal dates are shown.
 async function loadJapanFundamentals(){
