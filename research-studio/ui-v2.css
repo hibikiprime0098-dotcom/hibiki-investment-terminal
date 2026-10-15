@@ -15,3 +15,12 @@
 .pricepill span{display:block;font-size:10px;color:#698395;margin-bottom:5px}
 .pricepill b{display:block;font-size:14px;color:#244f55;white-space:nowrap}
 @media(max-width:770px){.summaryprices{grid-template-columns:repeat(2,minmax(0,1fr));padding:0 14px 14px}.pricepill:last-of-type{grid-column:1/-1}}
+
+/* Keep issuer identity visible while reviewing five separate JPY decision prices. */
+.companies{min-width:1930px}
+.companies th:first-child,.companies td:first-child{position:sticky;left:0;background:#fff;z-index:2;min-width:76px}
+.companies th:nth-child(2),.companies td:nth-child(2){position:sticky;left:76px;background:#fff;z-index:2;min-width:205px;border-right:1px solid #e0e9ed}
+.companies th:first-child,.companies th:nth-child(2){background:#f8fafc;z-index:3}
+.companies td .muted small{font-size:10px}
+.companies th:nth-child(9),.companies th:nth-child(10),.companies th:nth-child(11),.companies th:nth-child(12),.companies th:nth-child(13){min-width:134px}
+@media(max-width:700px){.companies{min-width:1900px}.companies th:nth-child(2),.companies td:nth-child(2){min-width:172px}}
