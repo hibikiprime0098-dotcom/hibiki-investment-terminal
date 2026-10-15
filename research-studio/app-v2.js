@@ -296,12 +296,13 @@ function secMetric(c,key,kind){
 }
 function reloadMarketWidget(){
  const holder=$('marketWidget');holder.innerHTML='';
- const all=stockSet().map(c=>({name:tradingSymbol(c),displayName:String(c['企業名／商品名']||c['証券コード'])}));
- const group={name:state.market==='JP'?'日本株':'海外株',symbols:all};
+ const groups=['量子','サイバー','AI'].map(name=>({name,
+  symbols:stockSet().filter(c=>theme(c)===name).map(c=>({name:tradingSymbol(c),
+   displayName:String(c['企業名／商品名']||c['証券コード'])}))})).filter(x=>x.symbols.length);
  const parent=document.createElement('div');parent.className='tradingview-widget-container';parent.style.cssText='width:100%;height:470px;overflow:hidden';
  parent.innerHTML='<div class="tradingview-widget-container__widget"></div>';
  const script=document.createElement('script');script.async=true;script.src='https://s3.tradingview.com/external-embedding/embed-widget-market-quotes.js';
- script.textContent=JSON.stringify({title:'市場データ（配信遅延・取引所ごとの制約あり）',width:'100%',height:'100%',locale:'ja',showSymbolLogo:false,symbolsGroups:[group],colorTheme:'light'});
+ script.textContent=JSON.stringify({title:'市場データ（配信遅延・取引所ごとの制約あり）',width:'100%',height:'100%',locale:'ja',showSymbolLogo:false,symbolsGroups:groups,colorTheme:'light'});
  parent.appendChild(script);holder.appendChild(parent);
 }
 function showDetail(code){
