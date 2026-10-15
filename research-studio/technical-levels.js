@@ -4,7 +4,7 @@
  */
 (function(root){
 'use strict';
-function ok(n){return Number.isFinite(Number(n))?Number(n):null;}
+function ok(n){if(n===null||n===undefined||String(n).trim()==='')return null;const t=String(n).replace(/,/g,'').trim();return Number.isFinite(Number(t))?Number(t):null;}
 function average(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;}
 function meanLast(a,n){return a.length>=n?average(a.slice(-n)):null;}
 function percentile(a,p){const s=a.filter(Number.isFinite).slice().sort((x,y)=>x-y);if(!s.length)return null;const v=(s.length-1)*p,lo=Math.floor(v),hi=Math.ceil(v);return s[lo]+(s[hi]-s[lo])*(v-lo);}
