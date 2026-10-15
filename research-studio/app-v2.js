@@ -113,12 +113,13 @@ function metricCell(c,key){
  return nfmt.format(val)+'倍'+(metricOrigin(c,key)==='annual'?'<small class="muted" style="display:block">決算期末</small>':'');
 }
 function valuation(c){
- const pf=numberMetric(c,'P/FCF（倍）');const pe=numberMetric(c,'PER（倍）');const ps=numberMetric(c,'P/S（倍）');
+ const pf=numberMetric(c,'P/FCF（倍）');const pe=numberMetric(c,'PER（倍）');const ps=numberMetric(c,'P/S（倍）');const pb=numberMetric(c,'PBR（倍）');
  let x,label,cutoffs;
  if(pf!==null){x=pf;label='P/FCF';cutoffs=[12,22,40,65,110];}
  else if(pe!==null){x=pe;label='PER';cutoffs=[12,21,33,55,90];}
  else if(ps!==null){x=ps;label='PSR';cutoffs=[2,5,11,22,40];}
- else return {score:null,label:'未確認'};
+ else if(pb!==null){x=pb;label='PBR（補助評価・業種差あり）';cutoffs=[1,2,4,8,15];}
+ else return {score:null,label:'財務倍率の元データ未取得'};
  const scores=[96,83,65,40,18,6];let score=scores.at(-1);
  for(let i=0;i<cutoffs.length;i++){if(x<=cutoffs[i]){score=scores[i];break;}}
  return {score,label:label+' '+nfmt.format(x)+'倍'};
@@ -188,7 +189,7 @@ function scoreBreakdown(c,sc){
  return config.map(([k,name,weight])=>{
   const value=sc.parts[k];let reason='';
   if(k==='safety')reason='既存財務評価：'+(plain(c['財務安全性（定性）'])||'未確認')+'。A/B/C/D→91/74/43/19点に暫定換算。定量的な自己資本比率・負債の直接計算ではありません。';
-  if(k==='v')reason=sc.valuation.label+'。P/FCF→PER→PSRの順に利用できる倍率を参照。低倍率だけでは適正価格を保証しません。';
+  if(k==='v')reason=sc.valuation.label+'。P/FCF→PER→PSR→PBRの順に利用できる倍率を参照。PBR単独では業種間の比較に限界があり、低倍率でも適正価格を保証しません。';
   if(k==='cash'){
   const f=state.fundamentals[symbolCode(c)];
   reason=f?.fcfMargin!=null?'SEC報告のFCFマージン '+pct(f.fcfMargin):
@@ -389,7 +390,8 @@ async function loadJapanFundamentals(){
     };
     const [d,stock]=await Promise.all([fetchJson('financials.json'),fetchJson('financials/stock.json')]);
     if(d.stock_code!==code||stock.stock_code!==code)throw Error('Code mismatch');
-    const last=(rows)=>Array.isArray(rows)?rows.filter(x=>x&&x.period).sort((a,b)=>String(b.period).localeCompare(String(a.period)))[0]:null;
+    const periodOrder=p=>{const m=String(p||'').match(/^(\d{4})\/(\d{1,2})$/);return m?Number(m[1])*12+Number(m[2]):0;};
+    const last=(rows)=>Array.isArray(rows)?rows.filter(x=>x&&x.period).sort((a,b)=>periodOrder(b.period)-periodOrder(a.period))[0]:null;
     const pl=last(d.financials),bs=last(d.bs),cf=last(d.cf),sh=last(stock.stock);
     const eligible=pl&&bs&&pl.period===bs.period&&pl.consolidation===bs.consolidation;
     const f={provider:'the-shashi.com',source:d.canonical_url,period_end:pl?.period||bs?.period||'',
@@ -397,10 +399,10 @@ async function loadJapanFundamentals(){
      data_attribution:d.attribution};
     if(eligible){
      if(Number(bs.total_assets)>0&&Number(bs.equity)>0)f.equityRatio=bs.equity/bs.total_assets;
-     if(Number(bs.equity)>0&&Number.isFinite(Number(pl.net_profit)))f.roe=pl.net_profit/bs.equity;
-     if(Number(pl.sales)>0&&cf?.period===pl.period&&Number.isFinite(Number(cf.operating_cf)))
+     if(Number(bs.equity)>0&&pl.net_profit!=null&&Number.isFinite(Number(pl.net_profit)))f.roe=pl.net_profit/bs.equity;
+     if(Number(pl.sales)>0&&cf?.period===pl.period&&cf.operating_cf!=null&&Number.isFinite(Number(cf.operating_cf)))
        f.operatingCashMargin=cf.operating_cf/pl.sales;
-     const historic=Array.isArray(d.financials)?d.financials.filter(x=>x?.period&&x.period!==pl.period&&x.consolidation===pl.consolidation).sort((a,b)=>String(b.period).localeCompare(String(a.period)))[0]:null;
+     const historic=Array.isArray(d.financials)?d.financials.filter(x=>x?.period&&x.period!==pl.period&&x.consolidation===pl.consolidation).sort((a,b)=>periodOrder(b.period)-periodOrder(a.period))[0]:null;
      if(historic&&Number(historic.sales)>0&&Number(pl.sales)>0)f.revenueGrowthYoY=pl.sales/historic.sales-1;
     }
     if(sh&&sh.period===pl?.period){
