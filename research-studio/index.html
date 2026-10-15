@@ -44,7 +44,14 @@
 <div id="detailBackdrop" class="backdrop" hidden><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="detailTitle"><div class="dialoghead"><div><div class="eyebrow" id="detailSymbol">COMPANY PROFILE</div><h2 id="detailTitle"></h2></div><button id="closeDetail" class="close" aria-label="閉じる">×</button></div>
 <div id="symbolQuote" style="padding:18px 28px 12px"><div class="hint">株価データの提供元ウィジェットを読み込みます。</div></div><div id="priceSummary" class="summaryprices"></div>
 <div class="chartbox"><div class="charthead"><h3>株価チャート</h3><span>TradingView提供 / 配信遅延に注意</span></div><div id="chartContainer"><p class="hint">チャートを読み込みます。</p></div><p class="hint" id="chartFallback"></p></div>
+<div class="panel" style="margin:0 28px 15px;padding:15px">
+<div class="sectionhead" style="margin:0 0 10px"><div><div class="eyebrow">HISTORICAL CHART MODEL</div><h3>過去チャートで検証する買い・売りの価格帯</h3></div><span class="badge" id="technicalBadge">履歴読込待ち</span></div>
+<p class="hint" id="technicalExplanation">日足データがない場合は暫定％モデルです。過去の日足60本以上が取得・登録されれば、安値・高値の支持抵抗と移動平均から買い売り価格を再計算します。</p>
+<label for="historyFile" class="ghost" style="display:inline-block;cursor:pointer;margin-top:8px">日足CSVを読み込む（任意）</label><input type="file" id="historyFile" accept=".csv,text/csv" style="position:absolute;width:1px;height:1px;opacity:0">
+<p class="hint">楽天証券などから正規にダウンロードした個人利用の時系列CSVをこのブラウザ内で計算します。データはGitHubに送信しません。</p>
+</div>
+<div id="technicalWidget" style="padding:0 28px 17px"><h3 style="margin:0 0 8px">TradingViewの日足テクニカル分析</h3><div class="hint">配信元による移動平均・オシレーターの参考判断を表示します。</div></div>
 <div class="dialogbody" id="detailBody"></div>
 <div id="symbolFinancials" style="padding:4px 28px 18px"><h3>財務データ（TradingView提供）</h3><div class="hint">財務・業績データの提供元ウィジェットを読み込みます。</div></div></div></div>
 <div class="toast" id="toast" aria-live="polite"></div>
-<script src="./app-v2.js" defer></script></body></html>
+<script src="./technical-levels.js" defer></script><script src="./app-v2.js" defer></script></body></html>
