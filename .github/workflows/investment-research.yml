@@ -25,6 +25,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: true
+      - name: Validate rankings, JPY prices, and historical chart model
+        run: node research-studio/scripts/test_research.js
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
