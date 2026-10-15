@@ -104,7 +104,7 @@ function metricOrigin(c,key){
  return null;
 }
 function metricText(c,key){
- const val=numberMetric(c,key);if(!(val>0))return '公表資料で確認（対象指標の算出値なし）';
+ const val=numberMetric(c,key);if(!(val>0))return '数値未取得（証券会社・会社IRで確認）';
  const past=metricOrigin(c,key)==='annual';
  const f=state.fundamentals[symbolCode(c)]||{};
  return nfmt.format(val)+'倍'+(past?'（決算期末 '+(f.period_end||'期不明')+'、現在倍率ではない）':'');
@@ -329,6 +329,16 @@ function reloadMarketWidget(){
  script.textContent=JSON.stringify({title:'市場データ（配信遅延・取引所ごとの制約あり）',width:'100%',height:'100%',locale:'ja',showSymbolLogo:false,symbolsGroups:groups,colorTheme:'light'});
  parent.appendChild(script);holder.appendChild(parent);
 }
+function financialReferenceLinks(c){
+ const code=symbolCode(c),name=String(c['企業名／商品名']||'');
+ const links=[
+  ['楽天証券', 'site:rakuten-sec.co.jp '+code+' '+name+' PER PBR'],
+  ['マネックス証券','site:monex.co.jp '+code+' '+name+' PER PBR'],
+  ['SBI証券','site:sbisec.co.jp '+code+' '+name+' 財務'],
+  ['企業IR',name+' 投資家情報 決算短信'],
+ ];
+ return links.map(([label,q])=>'<a target="_blank" rel="noopener noreferrer" href="https://www.google.com/search?q='+encodeURIComponent(q)+'">'+esc(label)+'の情報を探す ↗</a>').join('');
+}
 function showDetail(code){
  const c=state.companies.find(x=>symbolCode(x)===code);if(!c)return;state.activeCode=code;
  const s=scoreCompany(c),d=dividend(c),p=price(c),risk=c['主要リスク'],entry=entryPlan(c),parts=scoreBreakdown(c,s);
@@ -389,6 +399,7 @@ function showDetail(code){
  ['マネックス証券の公開情報を検索','https://www.google.com/search?q='+encodeURIComponent('site:monex.co.jp '+code+' '+c['企業名／商品名']+' 企業分析')],
  ['SBI証券の公開情報を検索','https://www.google.com/search?q='+encodeURIComponent('site:sbisec.co.jp '+code+' '+c['企業名／商品名']+' 財務')],
  ['配当の公式IR',d?.['IR出典']],['株主優待の公式IR',d?.['優待IR']]];
+ html+='<h3 style="margin-top:20px">証券会社・企業IRで財務指標を照合</h3><div class="linkrow">'+financialReferenceLinks(c)+'</div>';
  html+='<div class="linkrow">'+links.filter(x=>infoUrl(x[1])).map(x=>'<a href="'+esc(infoUrl(x[1]))+'" target="_blank" rel="noopener noreferrer">'+esc(x[0])+' ↗</a>').join('')+'</div>';
  $('detailBody').innerHTML=html;
  $('detailBackdrop').hidden=false;
@@ -431,7 +442,8 @@ async function loadJapanFundamentals(){
       const response=await fetch('https://the-shashi.com/api/'+code+'/'+suffix,{cache:'no-store',signal:AbortSignal.timeout(7500)});
       if(!response.ok)throw Error('HTTP '+response.status);return response.json();
     };
-    const [d,stock]=await Promise.all([fetchJson('financials.json'),fetchJson('financials/stock.json')]);
+    const [d,stockOutcome]=await Promise.all([fetchJson('financials.json'),fetchJson('financials/stock.json').catch(()=>null)]);
+    const stock=stockOutcome||{stock_code:code,stock:[]};
     if(d.stock_code!==code||stock.stock_code!==code)throw Error('Code mismatch');
     const periodOrder=p=>{const m=String(p||'').match(/^(\d{4})\/(\d{1,2})$/);return m?Number(m[1])*12+Number(m[2]):0;};
     const last=(rows)=>Array.isArray(rows)?rows.filter(x=>x&&x.period).sort((a,b)=>periodOrder(b.period)-periodOrder(a.period))[0]:null;
