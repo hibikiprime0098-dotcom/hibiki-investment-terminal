@@ -7,12 +7,16 @@ const state={
  lot:['1','100','200'].includes(localStorage.getItem('irs_lot_mode'))?Number(localStorage.getItem('irs_lot_mode')):1,
  fx:{JPY:1,USD:Number(localStorage.getItem('irs_usdjpy'))||150,EUR:0,GBP:0},
  fxNote:'保存されたレート／仮設定。最新値ではありません。',
- companies:[],models:[],chains:[],actions:{},quotes:{},fundamentals:{},localQuotes:{},histories:{},activeCode:null,
+ companies:[],models:[],chains:[],actions:{},quotes:{},fundamentals:{},localQuotes:{},histories:{},privateQuotes:{},privateFundamentals:{},privateSyncRunning:false,activeCode:null,
  watched:new Set(),chartReady:false,loaded:false
 };
 try{const raw=JSON.parse(localStorage.getItem('irs2_watch')||'[]');state.watched=new Set(Array.isArray(raw)?raw:[]);}catch(_){}
 try{state.localQuotes=JSON.parse(localStorage.getItem('irs2_reference_quotes')||'{}')}catch(_){}
 try{state.histories=JSON.parse(localStorage.getItem('irs2_daily_bars')||'{}')}catch(_){}
+try{state.privateQuotes=JSON.parse(localStorage.getItem('irs2_personal_eod_quotes')||'{}')}catch(_){}
+try{state.privateFundamentals=JSON.parse(localStorage.getItem('irs2_personal_financial_data')||'{}')}catch(_){}
+for(const [code,row] of Object.entries(state.privateFundamentals))if(row?.valuation){const v=row.valuation;state.fundamentals[code]={provider:'EODHD private',source:row.source,period_end:row.as_of||'',equityRatio:numMetricInitial(v.equityRatio),roe:numMetricInitial(v.roe),revenueGrowthYoY:numMetricInitial(v.revenueGrowthYoY)};}
+function numMetricInitial(x){const n=Number(x);return x===null||x===undefined||String(x).trim()===''||!Number.isFinite(n)?null:n;}
 const yenfmt=new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0});
 const nfmt=new Intl.NumberFormat('ja-JP',{maximumFractionDigits:2});
 function yen(n){return '¥'+yenfmt.format(Math.round(Number(n)||0));}
@@ -50,6 +54,7 @@ async function loadData(){
   state.companies=parseCSV(a);state.models=parseCSV(b);state.chains=parseCSV(c);state.actions=Object.fromEntries(parseCSV(d).map(x=>[x['コード'],x]));
   try{const q=JSON.parse(e);state.quotes=q.quotes&&typeof q.quotes==='object'?q.quotes:{};}catch(_){}
   try{const z=JSON.parse(g);state.fundamentals=z.companies&&typeof z.companies==='object'?z.companies:{};}catch(_){}
+  for(const [code,row] of Object.entries(state.privateFundamentals))hydratePrivateFundamental(code,row);
   try{const cache=JSON.parse(localStorage.getItem('irs2_jp_financial_cache')||'{}');
     if(cache.data&&typeof cache.data==='object')Object.assign(state.fundamentals,cache.data);
   }catch(_){}
@@ -58,6 +63,7 @@ async function loadData(){
   $('dataStatus').textContent=state.companies.length+'商品を登録 / 指標は時点値';
   render();
   loadJapanFundamentals();
+  if(personalDataConfig())syncPrivateMarket();
  }catch(err){$('dataStatus').textContent='データ読込エラー';$('rows').innerHTML='<tr><td colspan="15">企業データを読み込めませんでした。ページを再読み込みしてください。<br>'+esc(err.message)+'</td></tr>';}
 }
 function symbolCode(c){return String(c['証券コード']||'').trim();}
@@ -73,11 +79,20 @@ function price(c){
  let number=local,date=c['株価基準日']||'未確認',origin='調査時の参考価格';
  if(q&&Number(q.price)>0&&/^\d{4}-\d{2}-\d{2}$/.test(String(q.as_of||''))){number=Number(q.price);date=q.as_of;curr=q.currency||curr;origin='配信終値';}
  const user=state.localQuotes[code];if(user&&Number(user.price)>0){number=Number(user.price);date=String(user.as_of||'入力日未確認');curr=user.currency||curr;origin='ユーザー入力の参考値';}
+ const personal=state.privateQuotes[code];
+ if(personal&&Number(personal.price)>0&&/^[\d]{4}-\d{2}-\d{2}$/.test(String(personal.as_of||''))&&
+  (String(personal.as_of)>=String(date||'')||origin!=='ユーザー入力の参考値')){
+   number=Number(personal.price);date=personal.as_of;curr=personal.currency||curr;origin='個人契約EODHDの日次終値';
+ }
  const fx=state.fx[curr];return {value:number,currency:curr,fx,JPY:number!==null&&fx>0?number*fx:null,date,origin,verified:origin==='配信終値'};
 }
 function priceDisplay(c){const p=price(c);return p.JPY===null?(c['所在国']==='日本'?'円建て株価未取得':'株価・円換算未取得'):yen(p.JPY);}
 function marketValue(c){const p=price(c);return p.value===null?'株価未確認':p.currency+' '+nfmt.format(p.value);}
 function numberMetric(c,name){
+ const personal=state.privateFundamentals[symbolCode(c)]?.valuation;
+ const map={'PER（倍）':'per','PBR（倍）':'pbr','P/S（倍）':'psr','P/FCF（倍）':'pfcf'};
+ const privateValue=personal&&numMetric(personal[map[name]]);
+ if(privateValue!==null&&privateValue>0)return privateValue;
  const direct=nval(c[name]);if(direct!==null&&direct>0)return direct;
  const f=state.fundamentals[symbolCode(c)];if(f&&c['所在国']==='日本'&&f.provider==='the-shashi.com'){
   const tag={'PER（倍）':'historicPer','PBR（倍）':'historicPbr','P/S（倍）':'historicPsr'}[name];
@@ -99,6 +114,9 @@ function numberMetric(c,name){
  return null;
 }
 function metricOrigin(c,key){
+ const personal=state.privateFundamentals[symbolCode(c)]?.valuation;
+ const map={'PER（倍）':'per','PBR（倍）':'pbr','P/S（倍）':'psr','P/FCF（倍）':'pfcf'};
+ if(personal&&numMetric(personal[map[key]])>0)return 'private_eodhd';
  const direct=nval(c[key]);if(direct!==null&&direct>0)return 'existing';
  const f=state.fundamentals[symbolCode(c)];
  if(f?.provider==='the-shashi.com'&&({
@@ -110,11 +128,11 @@ function metricText(c,key){
  const val=numberMetric(c,key);if(!(val>0))return '数値未取得（証券会社・会社IRで確認）';
  const past=metricOrigin(c,key)==='annual';
  const f=state.fundamentals[symbolCode(c)]||{};
- return nfmt.format(val)+'倍'+(past?'（決算期末 '+(f.period_end||'期不明')+'、現在倍率ではない）':'');
+ return nfmt.format(val)+'倍'+(past?'（決算期末 '+(f.period_end||'期不明')+'、現在倍率ではない）':metricOrigin(c,key)==='private_eodhd'?'（個人契約EODHD）':'');
 }
 function metricCell(c,key){
  const val=numberMetric(c,key);if(!(val>0))return '<span class="muted">—<small style="display:block">算定元不足</small></span>';
- return nfmt.format(val)+'倍'+(metricOrigin(c,key)==='annual'?'<small class="muted" style="display:block">決算期末</small>':'');
+ return nfmt.format(val)+'倍'+(metricOrigin(c,key)==='annual'?'<small class="muted" style="display:block">決算期末</small>':metricOrigin(c,key)==='private_eodhd'?'<small class="muted" style="display:block">個人契約の指標</small>':'');
 }
 function valuation(c){
  const pf=numberMetric(c,'P/FCF（倍）');const pe=numberMetric(c,'PER（倍）');const ps=numberMetric(c,'P/S（倍）');const pb=numberMetric(c,'PBR（倍）');
@@ -501,6 +519,110 @@ async function loadFx(){
  $('fxStatus').textContent=state.fxNote;
  if(state.loaded)render();
 }
+function numMetric(x){if(x===null||x===undefined||String(x).trim()==='')return null;const n=Number(x);return Number.isFinite(n)?n:null;}
+function personalDataConfig(){
+ try{const url=localStorage.getItem('irs2_private_api_url')||'',key=localStorage.getItem('irs2_private_api_access')||'';
+  const parsed=new URL(url);
+  if(parsed.protocol!=='https:'||!key||key.length<20)return null;
+  return {base:parsed.origin,key};
+ }catch(_){return null;}
+}
+function savePrivateJSON(key,data){try{localStorage.setItem(key,JSON.stringify(data));}catch(_){/* Keep data in memory, never transmit to Github */}}
+async function privateGet(config,params){
+ const url=new URL('/api/data',config.base);
+ Object.entries(params).forEach(([key,value])=>url.searchParams.set(key,String(value)));
+ const res=await fetch(url,{method:'GET',headers:{Authorization:'Bearer '+config.key,Accept:'application/json'},
+  cache:'no-store',signal:AbortSignal.timeout(25000)});
+ let json;try{json=await res.json();}catch(_){json={error:'invalid_json'};}
+ if(!res.ok){const error=new Error(json.error||'HTTP '+res.status);error.status=res.status;throw error;}
+ return json;
+}
+function privateStatus(message){const el=$('privateSyncStatus');if(el)el.textContent=message;}
+function hydratePrivateFundamental(code,row){
+ if(!row||!row.valuation)return;
+ state.privateFundamentals[code]=row;
+ const val=row.valuation,old=state.fundamentals[code]||{};
+ state.fundamentals[code]={...old,provider:'EODHD private',source:row.source,period_end:row.as_of||'',
+   equityRatio:numMetric(val.equityRatio),roe:numMetric(val.roe),revenueGrowthYoY:numMetric(val.revenueGrowthYoY),
+   dividendYield:numMetric(val.dividendYield)};
+}
+async function syncPrivateMarket(){
+ if(state.privateSyncRunning||!state.loaded)return;
+ const config=personalDataConfig();if(!config){privateStatus('未接続。Vercel APIのURLとアクセスキーを初回登録してください。');return;}
+ state.privateSyncRunning=true;
+ $('privateApiUrl').value=config.base;
+ $('privateAccess').value=config.key;
+ let ok=0,failed=0,financialOk=0,stopped=false,failMessage='';
+ try{
+  const status=await privateGet(config,{mode:'status'});
+  if(!status.enabled)throw Error('バックエンドのEODHD_API_TOKENが未設定です。Vercelの環境変数を設定し、再デプロイしてください。');
+  const targets=state.companies.filter(c=>isStock(c)&&['JP','FOREIGN'].includes(country(c)));
+  async function process(items,workers,fn){
+   let next=0;
+   await Promise.all(Array.from({length:workers},async()=>{
+    while(next<items.length&&!stopped){
+     const c=items[next++],code=symbolCode(c);
+     try{await fn(c,code);}
+     catch(e){failed++;failMessage=e.message||'取得失敗';if(e.status===401||e.status===403||e.status===429)stopped=true;}
+     if((ok+failed)%5===0){privateStatus('個人データ同期：価格 '+ok+'/'+items.length+'件 / 失敗 '+failed+'件'+(failMessage?'（'+failMessage+'）':''));render();}
+    }
+   }));
+  }
+  await process(targets,3,async(c,code)=>{
+    const x=await privateGet(config,{mode:'history',code});
+    if(x.code!==code||!Array.isArray(x.bars)||x.bars.length<20||!(Number(x.price)>0))throw Error('銘柄データが不完全です');
+    const expected=c['所在国']==='日本'?'JPY':c['所在国']==='英国'?'GBP':c['所在国']==='フランス'?'EUR':'USD';
+    if(x.currency!==expected)throw Error('通貨が一致しません');
+    state.histories[code]=x.bars;
+    state.privateQuotes[code]={price:x.price,currency:x.currency,as_of:x.as_of,source:x.provider};
+    ok++;
+    if(ok%10===0){savePrivateJSON('irs2_daily_bars',state.histories);savePrivateJSON('irs2_personal_eod_quotes',state.privateQuotes);}
+  });
+  savePrivateJSON('irs2_daily_bars',state.histories);savePrivateJSON('irs2_personal_eod_quotes',state.privateQuotes);
+  if(!stopped){
+    let recentCache={};try{recentCache=JSON.parse(localStorage.getItem('irs2_personal_financial_cache_dates')||'{}')}catch(_){}
+    const now=Date.now();
+    const needs=targets.filter(c=>now-Number(recentCache[symbolCode(c)])>6*86400000);
+    let index=0;
+    await Promise.all(Array.from({length:2},async()=>{
+     while(index<needs.length&&!stopped){
+      const code=symbolCode(needs[index++]);
+      try{
+       const data=await privateGet(config,{mode:'fundamentals',code});
+       if(data?.valuation){
+        hydratePrivateFundamental(code,data);recentCache[code]=Date.now();financialOk++;
+        if(financialOk%10===0){savePrivateJSON('irs2_personal_financial_data',state.privateFundamentals);savePrivateJSON('irs2_personal_financial_cache_dates',recentCache);}
+       }
+      }catch(e){if(e.status===401||e.status===403||e.status===429){stopped=true;failMessage=e.message||'財務API契約を確認';} }
+     }
+    }));
+    savePrivateJSON('irs2_personal_financial_data',state.privateFundamentals);
+    savePrivateJSON('irs2_personal_financial_cache_dates',recentCache);
+  }
+  privateStatus('取得した日次価格 '+ok+'/'+targets.length+'社、財務データ新規取得 '+financialOk+'社。'+(failed?'取得不可 '+failed+'社。':'')+(stopped?'API権限または利用枠をご確認ください。':'基準日を確認してご利用ください。'));
+  render();
+ }catch(e){privateStatus('専用API：'+e.message+'。設定または契約状況をご確認ください。');}
+ finally{state.privateSyncRunning=false;}
+}
+function initPrivateControls(){
+ const conf=personalDataConfig();
+ if(conf){$('privateApiUrl').value=conf.base;$('privateAccess').value=conf.key;}
+ $('privateConnect').onclick=()=>{
+  const origin=$('privateApiUrl').value.trim().replace(/\/+$/,'');
+  const key=$('privateAccess').value.trim();
+  try{const u=new URL(origin);if(u.protocol!=='https:'||u.pathname!=='/')throw Error('https://で始まるVercelのURLを入力してください。');if(key.length<20)throw Error('20文字以上のアクセスキーを入力してください。');
+   localStorage.setItem('irs2_private_api_url',u.origin);localStorage.setItem('irs2_private_api_access',key);syncPrivateMarket();
+  }catch(e){privateStatus(e.message);}
+ };
+ $('privateDisconnect').onclick=()=>{
+  for(const k of ['irs2_private_api_url','irs2_private_api_access','irs2_personal_eod_quotes','irs2_personal_financial_data','irs2_personal_financial_cache_dates','irs2_daily_bars'])
+    localStorage.removeItem(k);
+  state.privateQuotes={};state.privateFundamentals={};state.histories={};state.privateSyncRunning=false;
+  $('privateApiUrl').value='';$('privateAccess').value='';
+  privateStatus('接続解除済み。個人データはこのブラウザから消去しました。');render();
+ };
+}
+
 function init(){
  document.querySelectorAll('[data-market]').forEach(b=>b.addEventListener('click',()=>{state.market=b.dataset.market;localStorage.setItem('irs2_market',state.market);$('search').value='';$('theme').value='all';$('relation').value='all';$('divFilter').value='all';$('sort').value='score';render();window.scrollTo({top:0,behavior:'smooth'});}));
  $('capital').addEventListener('input',e=>{if(e.target.value==='')return;let v=Math.max(0,Math.min(50000,Math.floor(Number(e.target.value))));if(!Number.isFinite(v))return;state.capital=v*10000;localStorage.setItem('irs_budget',String(state.capital));if(state.loaded)render();});
@@ -545,6 +667,6 @@ function init(){
  window.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});
  $('fxStatus').textContent=state.fxNote;
  $('capital').value=state.capital/10000;$('usdjpy').value=state.fx.USD;$('jpLots').value=state.lot;
- loadData();loadFx();
+ initPrivateControls();loadData();loadFx();
 }
 init();
