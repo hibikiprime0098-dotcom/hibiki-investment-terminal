@@ -495,6 +495,29 @@ function init(){
   state.localQuotes[code]={price:val,currency:curr,as_of:new Date().toISOString().slice(0,10)};
   localStorage.setItem('irs2_reference_quotes',JSON.stringify(state.localQuotes));showDetail(code);render();toast('確認した参考株価を5価格の基準に反映しました');
  });
+ $('historyFile').addEventListener('change',async e=>{
+ const file=e.target.files?.[0],code=state.activeCode;
+ if(!file||!code)return;
+ try{
+  if(file.size>4*1024*1024)throw Error('ファイル容量4MB以下をご利用ください');
+  const buf=await file.arrayBuffer();let txt;
+  try{txt=new TextDecoder('utf-8',{fatal:true}).decode(buf);}
+  catch(_){txt=new TextDecoder('shift_jis').decode(buf);}
+  const raw=parseCSV(txt);
+  const bars=globalThis.IRTechnical?.parseBars(raw)||[];
+  const analysis=globalThis.IRTechnical?.levels(bars);
+  if(!analysis?.ok)throw Error(analysis?.why||'OHLC日足の読み込みに失敗');
+  state.histories[code]=bars;
+  try{localStorage.setItem('irs2_daily_bars',JSON.stringify(state.histories));}
+  catch(err){delete state.histories[code];throw Error('ブラウザの保存容量を超えました');}
+  const company=state.companies.find(x=>symbolCode(x)===code),last=bars.at(-1);
+  if(!company)return;
+  state.localQuotes[code]={price:last.close,currency:company['所在国']==='日本'?'JPY':company['所在国']==='英国'?'GBP':company['所在国']==='フランス'?'EUR':'USD',as_of:last.date};
+  localStorage.setItem('irs2_reference_quotes',JSON.stringify(state.localQuotes));
+  render();showDetail(code);toast('日足'+bars.length+'本から支持・抵抗帯を計算しました');
+ }catch(err){toast('日足読込：'+err.message);}
+ finally{e.target.value='';}
+ });
  $('closeDetail').onclick=closeDetail;
  $('detailBackdrop').onclick=e=>{if(e.target===$('detailBackdrop'))closeDetail();};
  window.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});
